@@ -11,10 +11,11 @@ type Config struct {
 	RedisPassword string `envconfig:"REDIS_PASSWORD"`
 	RedisDB       int    `envconfig:"REDIS_DB" default:"0"`
 
-	JwtSecret     string `envconfig:"JWT_SECRET" required:"true"`
-	JwtTTLMinutes int    `envconfig:"JWT_TTL_MINUTES" default:"60"`
+	JwtSecret string `envconfig:"JWT_SECRET" required:"true"`
+	JwtTTL    int    `envconfig:"JWT_TTL_MINUTES" default:"60"`
 
-	OpenAIKey string `envconfig:"OPENAI_API_KEY"`
+	OpenAIKey   string `envconfig:"OPENAI_API_KEY"`
+	OpenAIModel string `envconfig:"OPENAI_MODEL" default:"gpt-3.5-turbo"`
 }
 
 func Load() (*Config, error) {
