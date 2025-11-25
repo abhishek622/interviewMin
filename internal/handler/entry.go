@@ -29,8 +29,8 @@ func (app *Application) ConvertInterview(c *gin.Context) {
 		}
 	}
 
-	userID, ok := c.Get("user_id")
-	if !ok {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -42,8 +42,8 @@ func (app *Application) ConvertInterview(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
 		return
 	}
-	if interview.UserID != userID.(string) {
-		app.Logger.Sugar().Warnw("convert interview: user mismatch", "user", userID, "owner", interview.UserID)
+	if interview.UserID != user.ID {
+		app.Logger.Sugar().Warnw("convert interview: user mismatch", "user", user.ID, "owner", interview.UserID)
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
@@ -113,8 +113,8 @@ func (app *Application) GetEntry(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
 		return
 	}
-	_, ok := c.Get("user_id")
-	if !ok {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -139,15 +139,15 @@ func (app *Application) ListEntries(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	userID, ok := c.Get("user_id")
-	if !ok {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 	limit := q.PageSize
 	offset := (q.Page - 1) * q.PageSize
 	ctx := c.Request.Context()
-	entries, total, err := app.EntryRepo.ListByUser(ctx, userID.(string), limit, offset)
+	entries, total, err := app.EntryRepo.ListByUser(ctx, user.ID, limit, offset)
 	if err != nil {
 		app.Logger.Sugar().Errorw("list entries repo error", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

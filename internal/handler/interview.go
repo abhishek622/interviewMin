@@ -25,8 +25,8 @@ func (app *Application) GetInterview(c *gin.Context) {
 		return
 	}
 
-	userID, ok := c.Get("user_id")
-	if !ok {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -42,7 +42,7 @@ func (app *Application) GetInterview(c *gin.Context) {
 	}
 
 	// Ensure the interview belongs to the current user
-	if interview.UserID != userID.(string) {
+	if interview.UserID != user.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
@@ -59,13 +59,13 @@ func (app *Application) CreateInterview(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	userID, ok := c.Get("user_id")
-	if !ok {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 	ctx := c.Request.Context()
-	id, err := app.InterviewRepo.Create(ctx, userID.(string), req.SourceID, req.Title, req.RawText)
+	id, err := app.InterviewRepo.Create(ctx, user.ID, req.SourceID, req.Title, req.RawText)
 	if err != nil {
 		app.Logger.Sugar().Errorw("interview create failed", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create interview"})
@@ -83,8 +83,8 @@ func (app *Application) ListInterviews(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	userID, ok := c.Get("user_id")
-	if !ok {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -92,7 +92,7 @@ func (app *Application) ListInterviews(c *gin.Context) {
 	offset := (q.Page - 1) * q.PageSize
 
 	ctx := c.Request.Context()
-	items, total, err := app.InterviewRepo.ListByUser(ctx, userID.(string), limit, offset)
+	items, total, err := app.InterviewRepo.ListByUser(ctx, user.ID, limit, offset)
 	if err != nil {
 		app.Logger.Sugar().Errorw("list interviews repo error", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -120,8 +120,8 @@ func (app *Application) DeleteInterview(c *gin.Context) {
 		return
 	}
 
-	userID, ok := c.Get("user_id")
-	if !ok {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -137,7 +137,7 @@ func (app *Application) DeleteInterview(c *gin.Context) {
 		return
 	}
 
-	if interview.UserID != userID.(string) {
+	if interview.UserID != user.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}

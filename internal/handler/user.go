@@ -101,16 +101,9 @@ func (app *Application) Login(c *gin.Context) {
 // Me returns the current user profile
 // GET /api/v1/me
 func (app *Application) Me(c *gin.Context) {
-	userID, ok := c.Get("user_id")
-	if !ok {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	ctx := c.Request.Context()
-	user, err := app.UserRepo.GetByID(ctx, userID.(string))
-	if err != nil {
-		app.Logger.Sugar().Errorw("me repo error", "user_id", userID, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 	c.JSON(http.StatusOK, model.UserResponse{ID: user.ID, Email: user.Email})

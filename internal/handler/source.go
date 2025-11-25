@@ -30,6 +30,11 @@ func (app *Application) ListSources(c *gin.Context) {
 // CreateSource - POST /api/v1/sources (admin)
 // If you need RBAC, ensure middleware is applied.
 func (app *Application) CreateSource(c *gin.Context) {
+	user := app.GetUserFromContext(c)
+	if user.ID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	var req createSourceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		app.Logger.Sugar().Warnw("create source bad request", "err", err)
