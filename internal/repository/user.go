@@ -21,8 +21,8 @@ type UserRepository struct {
 func (r *UserRepository) Create(ctx context.Context, email, passwordHash string) (string, error) {
 	id := uuid.New().String()
 	const q = `
-INSERT INTO users (id, email, password_hash, created_at, updated_at)
-VALUES ($1, $2, $3, now(), now())
+INSERT INTO users (user_id, email, password_hash, role, created_at, updated_at)
+VALUES ($1, $2, $3, 'user', now(), now())
 `
 	_, err := r.db.Exec(ctx, q, id, email, passwordHash)
 	if err != nil {
@@ -42,13 +42,13 @@ VALUES ($1, $2, $3, now(), now())
 // GetByEmail returns a user by email.
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (model.User, error) {
 	const q = `
-SELECT id, email, password_hash, created_at, updated_at
+SELECT user_id, email, password_hash, role, created_at, updated_at
 FROM users
 WHERE email = $1
 `
 	var u model.User
 	row := r.db.QueryRow(ctx, q, email)
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.UserID, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.User{}, fmt.Errorf("user not found: %w", err)
 		}
@@ -60,13 +60,13 @@ WHERE email = $1
 // GetByID returns a user by id.
 func (r *UserRepository) GetByID(ctx context.Context, id string) (model.User, error) {
 	const q = `
-SELECT id, email, password_hash, created_at, updated_at
+SELECT user_id, email, password_hash, role, created_at, updated_at
 FROM users
-WHERE id = $1
+WHERE user_id = $1
 `
 	var u model.User
 	row := r.db.QueryRow(ctx, q, id)
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.UserID, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.User{}, fmt.Errorf("user not found: %w", err)
 		}

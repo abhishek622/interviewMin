@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/abhishek622/interviewMin/internal/fetcher"
 	"github.com/abhishek622/interviewMin/internal/openai"
 	"github.com/abhishek622/interviewMin/internal/repository"
 	"github.com/abhishek622/interviewMin/pkg/model"
@@ -9,15 +10,15 @@ import (
 )
 
 type Application struct {
-	Logger        *zap.Logger
-	UserRepo      repository.UserRepository
-	InterviewRepo repository.InterviewRepository
-	EntryRepo     repository.EntryRepository
-	SourceRepo    repository.SourceRepository
-	JwtKey        string
-	JwtTTL        int
-	OpenAI        *openai.Client
-	OpenAIModel   string
+	Logger         *zap.Logger
+	UserRepo       repository.UserRepository
+	ExperienceRepo repository.ExperienceRepository
+	QuestionRepo   repository.QuestionRepository
+	JwtKey         string
+	JwtTTL         int
+	OpenAI         *openai.Client
+	OpenAIModel    string
+	Fetcher        *fetcher.Fetcher
 }
 
 // GetUserFromContext retrieves the current user from the gin context

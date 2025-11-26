@@ -56,7 +56,7 @@ func (app *Application) SignUp(c *gin.Context) {
 	expiresAt := time.Now().Add(time.Duration(app.JwtTTL) * time.Minute).Unix()
 
 	c.JSON(http.StatusCreated, gin.H{
-		"user":  model.UserResponse{ID: id, Email: req.Email},
+		"user":  model.UserResponse{UserID: id, Email: req.Email},
 		"token": model.TokenResponse{AccessToken: token, ExpiresAt: expiresAt},
 	})
 }
@@ -84,7 +84,7 @@ func (app *Application) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := auth.GenerateToken(app.JwtKey, user.ID, app.JwtTTL)
+	token, err := auth.GenerateToken(app.JwtKey, user.UserID, app.JwtTTL)
 	if err != nil {
 		app.Logger.Sugar().Errorw("token generation failed", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
@@ -93,7 +93,7 @@ func (app *Application) Login(c *gin.Context) {
 	expiresAt := time.Now().Add(time.Duration(app.JwtTTL) * time.Minute).Unix()
 
 	c.JSON(http.StatusOK, gin.H{
-		"user":  model.UserResponse{ID: user.ID, Email: user.Email},
+		"user":  model.UserResponse{UserID: user.UserID, Email: user.Email},
 		"token": model.TokenResponse{AccessToken: token, ExpiresAt: expiresAt},
 	})
 }
@@ -102,9 +102,9 @@ func (app *Application) Login(c *gin.Context) {
 // GET /api/v1/me
 func (app *Application) Me(c *gin.Context) {
 	user := app.GetUserFromContext(c)
-	if user.ID == "" {
+	if user.UserID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	c.JSON(http.StatusOK, model.UserResponse{ID: user.ID, Email: user.Email})
+	c.JSON(http.StatusOK, model.UserResponse{UserID: user.UserID, Email: user.Email})
 }
