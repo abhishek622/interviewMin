@@ -19,17 +19,16 @@ func (r *QuestionRepository) CreateBatch(ctx context.Context, questions []model.
 	}
 
 	batch := &pgx.Batch{}
-	const q = `
-INSERT INTO questions (q_id, exp_id, question, type, created_at)
-VALUES ($1, $2, $3, $4, now())
-`
+	const q = `INSERT INTO questions (exp_id, question, "type") VALUES ($1, $2, $3)`
+
 	for _, question := range questions {
-		batch.Queue(q, question.QID, question.ExpID, question.Question, question.Type)
+		batch.Queue(q, question.ExpID, question.Question, question.Type)
 	}
 
 	br := r.db.SendBatch(ctx, batch)
 	defer br.Close()
 
+	// Execute each queued statement
 	for i := 0; i < len(questions); i++ {
 		_, err := br.Exec()
 		if err != nil {
@@ -40,7 +39,7 @@ VALUES ($1, $2, $3, $4, now())
 	return nil
 }
 
-func (r *QuestionRepository) ListByExperienceID(ctx context.Context, expID string) ([]model.Question, error) {
+func (r *QuestionRepository) ListByExperienceID(ctx context.Context, expID int64) ([]model.Question, error) {
 	const q = `
 SELECT q_id, exp_id, question, type, created_at
 FROM questions

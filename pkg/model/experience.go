@@ -13,8 +13,8 @@ const (
 )
 
 type Experience struct {
-	ExpID      string                 `json:"exp_id" db:"exp_id"`
-	UserID     string                 `json:"user_id" db:"user_id"`
+	ExpID      int64                  `json:"exp_id" db:"exp_id"`
+	UserID     int64                  `json:"user_id" db:"user_id"`
 	Company    string                 `json:"company" db:"company"`
 	Position   string                 `json:"position" db:"position"`
 	Source     Source                 `json:"source" db:"source"`

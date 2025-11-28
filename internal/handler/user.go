@@ -20,7 +20,6 @@ func comparePassword(hash, pw string) error {
 }
 
 // SignUp creates a new user and returns a token
-// POST /api/v1/signup
 func (app *Application) SignUp(c *gin.Context) {
 	var req model.SignUpRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -62,7 +61,6 @@ func (app *Application) SignUp(c *gin.Context) {
 }
 
 // Login verifies credentials and returns JWT
-// POST /api/v1/login
 func (app *Application) Login(c *gin.Context) {
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -99,10 +97,9 @@ func (app *Application) Login(c *gin.Context) {
 }
 
 // Me returns the current user profile
-// GET /api/v1/me
 func (app *Application) Me(c *gin.Context) {
 	user := app.GetUserFromContext(c)
-	if user.UserID == "" {
+	if user.UserID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}

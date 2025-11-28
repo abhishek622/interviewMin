@@ -11,6 +11,7 @@ import (
 	"github.com/abhishek622/interviewMin/internal/openai"
 	"github.com/abhishek622/interviewMin/internal/repository"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/joho/godotenv/autoload"
 	"go.uber.org/zap"
 )
 

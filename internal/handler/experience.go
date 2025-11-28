@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/abhishek622/interviewMin/internal/openai"
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 // CreateExperience handles the creation of a new interview experience
@@ -22,7 +22,7 @@ func (app *Application) CreateExperience(c *gin.Context) {
 	}
 
 	user := app.GetUserFromContext(c)
-	if user.UserID == "" {
+	if user.UserID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -116,9 +116,6 @@ func (app *Application) CreateExperience(c *gin.Context) {
 		return
 	}
 
-	// 4. Save to DB
-	expID := uuid.New().String()
-
 	// Construct Metadata
 	metadata := map[string]interface{}{
 		"title":           extracted.Title,
@@ -126,7 +123,6 @@ func (app *Application) CreateExperience(c *gin.Context) {
 	}
 
 	exp := &model.Experience{
-		ExpID:      expID,
 		UserID:     user.UserID,
 		Company:    extracted.Company,
 		Position:   extracted.Position,
@@ -156,19 +152,17 @@ func (app *Application) CreateExperience(c *gin.Context) {
 		qs := make([]model.Question, len(extracted.Questions))
 		for i, q := range extracted.Questions {
 			qs[i] = model.Question{
-				QID:      uuid.New().String(),
-				ExpID:    expID,
+				ExpID:    exp.ExpID,
 				Question: q.Question,
 				Type:     q.Type,
 			}
 		}
 		if err := app.QuestionRepo.CreateBatch(c.Request.Context(), qs); err != nil {
 			app.Logger.Sugar().Warnw("failed to save questions", "err", err)
-			// Don't fail the request, just log
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"exp_id": expID})
+	c.JSON(http.StatusOK, gin.H{"exp_id": exp.ExpID})
 }
 
 func (app *Application) ListExperiences(c *gin.Context) {
@@ -179,7 +173,7 @@ func (app *Application) ListExperiences(c *gin.Context) {
 	}
 
 	user := app.GetUserFromContext(c)
-	if user.UserID == "" {
+	if user.UserID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -209,9 +203,15 @@ func (app *Application) ListExperiences(c *gin.Context) {
 }
 
 func (app *Application) GetExperience(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
+	idStr := c.Param("id")
+	if idStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
+		return
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id format"})
 		return
 	}
 

@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS questions (
-    q_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    exp_id      UUID NOT NULL REFERENCES experiences(exp_id) ON DELETE CASCADE,
+    q_id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    exp_id      BIGINT NOT NULL REFERENCES experiences(exp_id) ON DELETE CASCADE,
 
     question    TEXT NOT NULL,
     type        TEXT NOT NULL,                      -- behavioral/coding/system design

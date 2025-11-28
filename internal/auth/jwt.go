@@ -7,11 +7,11 @@ import (
 )
 
 type Claims struct {
-	UserID string `json:"user_id"`
+	UserID int64 `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(secret, userID string, ttlMinutes int) (string, error) {
+func GenerateToken(secret string, userID int64, ttlMinutes int) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		UserID: userID,

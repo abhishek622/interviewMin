@@ -10,7 +10,7 @@ const (
 )
 
 type User struct {
-	UserID       string    `json:"user_id" db:"user_id"`
+	UserID       int64     `json:"user_id" db:"user_id"`
 	Email        string    `json:"email" db:"email"`
 	PasswordHash string    `json:"-" db:"password_hash"`
 	Role         UserRole  `json:"role" db:"role"`
@@ -29,7 +29,7 @@ type LoginRequest struct {
 }
 
 type UserResponse struct {
-	UserID string   `json:"user_id"`
+	UserID int64    `json:"user_id"`
 	Email  string   `json:"email"`
 	Role   UserRole `json:"role"`
 }

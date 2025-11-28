@@ -3,16 +3,16 @@ package model
 import "time"
 
 type Question struct {
-	QID       string    `json:"q_id" db:"q_id"`
-	ExpID     string    `json:"exp_id" db:"exp_id"`
+	QID       int64     `json:"q_id" db:"q_id"`
+	ExpID     int64     `json:"exp_id" db:"exp_id"`
 	Question  string    `json:"question" db:"question"`
 	Type      string    `json:"type" db:"type"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
 type QuestionResponse struct {
-	QID       string    `json:"q_id"`
-	ExpID     string    `json:"exp_id"`
+	QID       int64     `json:"q_id"`
+	ExpID     int64     `json:"exp_id"`
 	Question  string    `json:"question"`
 	Type      string    `json:"type"`
 	CreatedAt time.Time `json:"created_at"`

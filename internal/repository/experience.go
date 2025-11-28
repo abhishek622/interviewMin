@@ -17,15 +17,12 @@ type ExperienceRepository struct {
 func (r *ExperienceRepository) Create(ctx context.Context, exp *model.Experience) error {
 	const q = `
 INSERT INTO experiences (
-	exp_id, user_id, company, position, source, no_of_round, 
-	source_link, location, metadata, created_at, updated_at
-) VALUES (
-	$1, $2, $3, $4, $5, $6, 
-	$7, $8, $9, now(), now()
-)
+	 user_id, company, position, source, no_of_round, 
+	source_link, location, metadata
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 	_, err := r.db.Exec(ctx, q,
-		exp.ExpID, exp.UserID, exp.Company, exp.Position, exp.Source, exp.NoOfRound,
+		exp.UserID, exp.Company, exp.Position, exp.Source, exp.NoOfRound,
 		exp.SourceLink, exp.Location, exp.Metadata,
 	)
 	if err != nil {
@@ -34,7 +31,7 @@ INSERT INTO experiences (
 	return nil
 }
 
-func (r *ExperienceRepository) GetByID(ctx context.Context, id string) (*model.Experience, error) {
+func (r *ExperienceRepository) GetByID(ctx context.Context, id int64) (*model.Experience, error) {
 	const q = `
 SELECT 
 	exp_id, user_id, company, position, source, no_of_round, 
@@ -57,7 +54,7 @@ WHERE exp_id = $1
 	return &e, nil
 }
 
-func (r *ExperienceRepository) ListByUser(ctx context.Context, userID string, limit, offset int) ([]model.Experience, int, error) {
+func (r *ExperienceRepository) ListByUser(ctx context.Context, userID int64, limit, offset int) ([]model.Experience, int, error) {
 	var total int
 	const countQ = `SELECT COUNT(*) FROM experiences WHERE user_id = $1`
 	if err := r.db.QueryRow(ctx, countQ, userID).Scan(&total); err != nil {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/abhishek622/interviewMin/pkg/model"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,25 +17,28 @@ type UserRepository struct {
 }
 
 // Create inserts a new user and returns the new user's id.
-func (r *UserRepository) Create(ctx context.Context, email, passwordHash string) (string, error) {
-	id := uuid.New().String()
+func (r *UserRepository) Create(ctx context.Context, email, passwordHash string) (int64, error) {
 	const q = `
-INSERT INTO users (user_id, email, password_hash, role, created_at, updated_at)
-VALUES ($1, $2, $3, 'user', now(), now())
+INSERT INTO users (email, password_hash, role, created_at, updated_at)
+VALUES ($1, $2, 'user', now(), now())
+RETURNING user_id;
 `
-	_, err := r.db.Exec(ctx, q, id, email, passwordHash)
+
+	var userID int64
+	err := r.db.QueryRow(ctx, q, email, passwordHash).Scan(&userID)
 	if err != nil {
 		// handle unique violation more gracefully if desired
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			// PostgreSQL unique_violation code is "23505"
 			if pgErr.Code == "23505" {
-				return "", fmt.Errorf("email already exists: %w", err)
+				return 0, fmt.Errorf("email already exists: %w", err)
 			}
 		}
-		return "", fmt.Errorf("insert user: %w", err)
+		return 0, fmt.Errorf("insert user: %w", err)
 	}
-	return id, nil
+
+	return userID, nil
 }
 
 // GetByEmail returns a user by email.
@@ -58,7 +60,7 @@ WHERE email = $1
 }
 
 // GetByID returns a user by id.
-func (r *UserRepository) GetByID(ctx context.Context, id string) (model.User, error) {
+func (r *UserRepository) GetByID(ctx context.Context, id int64) (model.User, error) {
 	const q = `
 SELECT user_id, email, password_hash, role, created_at, updated_at
 FROM users
