@@ -28,19 +28,12 @@ func (app *application) routes() http.Handler {
 	protected.Use(app.AuthMiddleware())
 	{
 		protected.GET("/me", app.Handler.Me)
-		protected.POST("/interviews", app.Handler.CreateInterview)
-		protected.GET("/interviews", app.Handler.ListInterviews)
-		protected.GET("/interviews/:id", app.Handler.GetInterview)
-		protected.DELETE("/interviews/:id", app.Handler.DeleteInterview)
-		protected.POST("/interviews/:id/convert", app.Handler.ConvertInterview) // call openai to parse
 
-		// entry routes
-		protected.GET("/entries", app.Handler.ListEntries)
-		protected.GET("/entries/:id", app.Handler.GetEntry)
+		// experience routes
+		protected.POST("/experiences", app.Handler.CreateExperience)
+		protected.GET("/experiences", app.Handler.ListExperiences)
+		protected.GET("/experiences/:id", app.Handler.GetExperience)
 
-		// source routes (admin only - could add admin middleware)
-		protected.GET("/sources", app.Handler.ListSources)
-		protected.POST("/sources", app.Handler.CreateSource) // TODO: add admin middleware
 	}
 
 	return r

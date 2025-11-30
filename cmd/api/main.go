@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
+	"time"
 
-	"github.com/abhishek622/interviewMin/internal/cache"
+	"github.com/abhishek622/interviewMin/internal/auth"
 	"github.com/abhishek622/interviewMin/internal/config"
 	"github.com/abhishek622/interviewMin/internal/database"
 	"github.com/abhishek622/interviewMin/internal/handler"
@@ -11,18 +12,17 @@ import (
 	"github.com/abhishek622/interviewMin/internal/openai"
 	"github.com/abhishek622/interviewMin/internal/repository"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
+	_ "github.com/joho/godotenv/autoload"
 	"go.uber.org/zap"
 )
 
 type application struct {
 	DB         *pgxpool.Pool
-	Redis      *redis.Client
 	OpenAI     *openai.Client
 	Logger     *zap.Logger
 	Config     *config.Config
 	Repository *repository.Repository
-	Handler    *handler.Application
+	Handler    *handler.Handler
 }
 
 func main() {
@@ -43,30 +43,24 @@ func main() {
 	}
 	defer pool.Close()
 
-	rclient := cache.NewRedisClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
-	if err := cache.Ping(ctx, rclient); err != nil {
-		sugar.Fatalf("redis ping failed: %v", err)
-	}
-
 	openaiClient := openai.NewClient(cfg.OpenAIKey)
-
 	repo := repository.NewRepository(pool)
+	tokenMaker := auth.NewJWTMaker(cfg.JwtSecret)
 
-	handlerApp := &handler.Application{
-		Logger:        log,
-		UserRepo:      repo.User,
-		InterviewRepo: repo.Interview,
-		EntryRepo:     repo.Entry,
-		SourceRepo:    repo.Source,
-		JwtKey:        cfg.JwtSecret,
-		JwtTTL:        cfg.JwtTTL,
-		OpenAI:        openaiClient,
-		OpenAIModel:   cfg.OpenAIModel,
+	handlerApp := &handler.Handler{
+		Logger:         log,
+		UserRepo:       repo.User,
+		ExperienceRepo: repo.Experience,
+		QuestionRepo:   repo.Question,
+		JwtKey:         cfg.JwtSecret,
+		JwtTTL:         time.Duration(cfg.JwtTTL) * time.Minute,
+		OpenAI:         openaiClient,
+		OpenAIModel:    cfg.OpenAIModel,
+		TokenMaker:     tokenMaker,
 	}
 
 	app := &application{
 		DB:         pool,
-		Redis:      rclient,
 		OpenAI:     openaiClient,
 		Logger:     log,
 		Config:     cfg,
