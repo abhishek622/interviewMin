@@ -1,23 +1,14 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/abhishek622/interviewMin/internal/auth"
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 )
-
-// --- Helpers ---
-func hashPassword(p string) (string, error) {
-	b, err := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
-	return string(b), err
-}
-func comparePassword(hash, pw string) error {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw))
-}
 
 // SignUp creates a new user and returns a token
 func (app *Application) SignUp(c *gin.Context) {
@@ -36,7 +27,7 @@ func (app *Application) SignUp(c *gin.Context) {
 		return
 	}
 
-	id, err := app.UserRepo.Create(ctx, req.Email, pwHash)
+	user, err := app.UserRepo.Create(ctx, req.Email, pwHash)
 	if err != nil {
 		app.Logger.Sugar().Errorw("user create failed", "email", req.Email, "err", err)
 		// hide DB errors from clients; assume duplicate email will be surfaced by repo
@@ -45,7 +36,7 @@ func (app *Application) SignUp(c *gin.Context) {
 	}
 
 	// generate token
-	token, err := auth.GenerateToken(app.JwtKey, id, app.JwtTTL)
+	token, err := auth.GenerateToken(app.JwtKey, user.UserID, app.JwtTTL)
 	if err != nil {
 		app.Logger.Sugar().Errorw("token generation failed", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
@@ -55,7 +46,7 @@ func (app *Application) SignUp(c *gin.Context) {
 	expiresAt := time.Now().Add(time.Duration(app.JwtTTL) * time.Minute).Unix()
 
 	c.JSON(http.StatusCreated, gin.H{
-		"user":  model.UserResponse{UserID: id, Email: req.Email},
+		"user":  model.UserResponse{UserID: user.UserID, Email: req.Email, Role: user.Role},
 		"token": model.TokenResponse{AccessToken: token, ExpiresAt: expiresAt},
 	})
 }
@@ -72,7 +63,6 @@ func (app *Application) Login(c *gin.Context) {
 	user, err := app.UserRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
 		app.Logger.Sugar().Warnw("login user not found", "email", req.Email, "err", err)
-		// Do not reveal whether email exists
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
@@ -91,7 +81,7 @@ func (app *Application) Login(c *gin.Context) {
 	expiresAt := time.Now().Add(time.Duration(app.JwtTTL) * time.Minute).Unix()
 
 	c.JSON(http.StatusOK, gin.H{
-		"user":  model.UserResponse{UserID: user.UserID, Email: user.Email},
+		"user":  model.UserResponse{UserID: user.UserID, Email: user.Email, Role: user.Role},
 		"token": model.TokenResponse{AccessToken: token, ExpiresAt: expiresAt},
 	})
 }
@@ -99,9 +89,10 @@ func (app *Application) Login(c *gin.Context) {
 // Me returns the current user profile
 func (app *Application) Me(c *gin.Context) {
 	user := app.GetUserFromContext(c)
+	fmt.Println(user)
 	if user.UserID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	c.JSON(http.StatusOK, model.UserResponse{UserID: user.UserID, Email: user.Email})
+	c.JSON(http.StatusOK, model.UserResponse{UserID: user.UserID, Email: user.Email, Role: user.Role})
 }

@@ -5,7 +5,6 @@ import (
 
 	"github.com/abhishek622/interviewMin/internal/config"
 	"github.com/abhishek622/interviewMin/internal/database"
-	"github.com/abhishek622/interviewMin/internal/fetcher"
 	"github.com/abhishek622/interviewMin/internal/handler"
 	"github.com/abhishek622/interviewMin/internal/logger"
 	"github.com/abhishek622/interviewMin/internal/openai"
@@ -21,7 +20,7 @@ type application struct {
 	Logger     *zap.Logger
 	Config     *config.Config
 	Repository *repository.Repository
-	Handler    *handler.Application
+	Handler    *handler.Handler
 }
 
 func main() {
@@ -43,11 +42,9 @@ func main() {
 	defer pool.Close()
 
 	openaiClient := openai.NewClient(cfg.OpenAIKey)
-	fetcherClient := fetcher.NewFetcher()
-
 	repo := repository.NewRepository(pool)
 
-	handlerApp := &handler.Application{
+	handlerApp := &handler.Handler{
 		Logger:         log,
 		UserRepo:       repo.User,
 		ExperienceRepo: repo.Experience,
@@ -56,7 +53,6 @@ func main() {
 		JwtTTL:         cfg.JwtTTL,
 		OpenAI:         openaiClient,
 		OpenAIModel:    cfg.OpenAIModel,
-		Fetcher:        fetcherClient,
 	}
 
 	app := &application{

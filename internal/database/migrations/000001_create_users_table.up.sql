@@ -1,12 +1,11 @@
-CREATE TYPE user_role AS ENUM ('user', 'admin');
-
 CREATE TABLE IF NOT EXISTS users (
-  user_id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  email        TEXT NOT NULL UNIQUE,
+  user_id       UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name          VARCHAR(255) NOT NULL,
+  email         VARCHAR(255) NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  role         user_role NOT NULL DEFAULT 'user',
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  is_admin      BOOLEAN NOT NULL DEFAULT false,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()

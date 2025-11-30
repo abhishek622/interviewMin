@@ -26,8 +26,9 @@ type Experience struct {
 }
 
 type CreateExperienceRequest struct {
-	SourceLink string `json:"source_link" binding:"required"`
+	SourceLink string `json:"source_link" binding:"optional"`
 	Source     Source `json:"source" binding:"required"`
+	TextInput  string `json:"text_input" binding:"optional"`
 }
 
 type ListExperiencesQuery struct {

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"github.com/abhishek622/interviewMin/internal/fetcher"
 	"github.com/abhishek622/interviewMin/internal/openai"
 	"github.com/abhishek622/interviewMin/internal/repository"
 	"github.com/abhishek622/interviewMin/pkg/model"
@@ -9,7 +8,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type Application struct {
+type Handler struct {
 	Logger         *zap.Logger
 	UserRepo       repository.UserRepository
 	ExperienceRepo repository.ExperienceRepository
@@ -18,11 +17,10 @@ type Application struct {
 	JwtTTL         int
 	OpenAI         *openai.Client
 	OpenAIModel    string
-	Fetcher        *fetcher.Fetcher
 }
 
 // GetUserFromContext retrieves the current user from the gin context
-func (app *Application) GetUserFromContext(c *gin.Context) *model.User {
+func (app *Handler) GetUserFromContext(c *gin.Context) *model.User {
 	contextUser, exists := c.Get("user")
 	if !exists {
 		return &model.User{}

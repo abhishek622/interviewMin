@@ -2,18 +2,12 @@ package model
 
 import "time"
 
-type UserRole string
-
-const (
-	UserRoleUser  UserRole = "user"
-	UserRoleAdmin UserRole = "admin"
-)
-
 type User struct {
-	UserID       int64     `json:"user_id" db:"user_id"`
+	UserID       string    `json:"user_id" db:"user_id"`
+	Name         string    `json:"name" db:"name"`
 	Email        string    `json:"email" db:"email"`
 	PasswordHash string    `json:"-" db:"password_hash"`
-	Role         UserRole  `json:"role" db:"role"`
+	IsAdmin      bool      `json:"is_admin" db:"is_admin"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -21,6 +15,7 @@ type User struct {
 type SignUpRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
+	Name     string `json:"name" binding:"required,min=2"`
 }
 
 type LoginRequest struct {
@@ -29,9 +24,10 @@ type LoginRequest struct {
 }
 
 type UserResponse struct {
-	UserID int64    `json:"user_id"`
-	Email  string   `json:"email"`
-	Role   UserRole `json:"role"`
+	UserID  string `json:"user_id"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	IsAdmin bool   `json:"is_admin"`
 }
 
 type TokenResponse struct {
