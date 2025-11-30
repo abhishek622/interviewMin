@@ -1,39 +1,43 @@
 package handler
 
 import (
-	"time"
-
 	"github.com/abhishek622/interviewMin/internal/auth"
-	"github.com/abhishek622/interviewMin/internal/openai"
+	"github.com/abhishek622/interviewMin/internal/groq"
 	"github.com/abhishek622/interviewMin/internal/repository"
-	"github.com/abhishek622/interviewMin/pkg/model"
+	"github.com/abhishek622/interviewMin/pkg"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type Handler struct {
-	Logger         *zap.Logger
-	UserRepo       repository.UserRepository
-	ExperienceRepo repository.ExperienceRepository
-	QuestionRepo   repository.QuestionRepository
-	JwtKey         string
-	JwtTTL         time.Duration
-	OpenAI         *openai.Client
-	OpenAIModel    string
-	TokenMaker     *auth.JWTMaker
+	Logger     *zap.Logger
+	Repository *repository.Repository
+	TokenMaker *auth.JWTMaker
+	Crypto     *pkg.Crypto
+	GroqClient *groq.Client
 }
 
-// GetUserFromContext retrieves the current user from the gin context
-func (h *Handler) GetUserFromContext(c *gin.Context) *model.User {
-	contextUser, exists := c.Get("user")
+func NewHandler(logger *zap.Logger, repository *repository.Repository, tokenMaker *auth.JWTMaker, crypto *pkg.Crypto, groqClient *groq.Client) *Handler {
+	return &Handler{
+		Logger:     logger,
+		Repository: repository,
+		TokenMaker: tokenMaker,
+		Crypto:     crypto,
+		GroqClient: groqClient,
+	}
+}
+
+// GetClaimsFromContext retrieves the current user claims from the gin context
+func (h *Handler) GetClaimsFromContext(c *gin.Context) *auth.UserClaims {
+	contextClaims, exists := c.Get("claims")
 	if !exists {
-		return &model.User{}
+		return nil
 	}
 
-	user, ok := contextUser.(*model.User)
+	claims, ok := contextClaims.(*auth.UserClaims)
 	if !ok {
-		return &model.User{}
+		return nil
 	}
 
-	return user
+	return claims
 }

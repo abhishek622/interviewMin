@@ -2,15 +2,15 @@ package main
 
 import (
 	"context"
-	"time"
 
 	"github.com/abhishek622/interviewMin/internal/auth"
 	"github.com/abhishek622/interviewMin/internal/config"
 	"github.com/abhishek622/interviewMin/internal/database"
+	"github.com/abhishek622/interviewMin/internal/groq"
 	"github.com/abhishek622/interviewMin/internal/handler"
 	"github.com/abhishek622/interviewMin/internal/logger"
-	"github.com/abhishek622/interviewMin/internal/openai"
 	"github.com/abhishek622/interviewMin/internal/repository"
+	"github.com/abhishek622/interviewMin/pkg"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/joho/godotenv/autoload"
 	"go.uber.org/zap"
@@ -18,7 +18,6 @@ import (
 
 type application struct {
 	DB         *pgxpool.Pool
-	OpenAI     *openai.Client
 	Logger     *zap.Logger
 	Config     *config.Config
 	Repository *repository.Repository
@@ -43,29 +42,22 @@ func main() {
 	}
 	defer pool.Close()
 
-	openaiClient := openai.NewClient(cfg.OpenAIKey)
 	repo := repository.NewRepository(pool)
+	groqClient := groq.NewClient(cfg.GroqAPIKey, cfg.AIModel)
 	tokenMaker := auth.NewJWTMaker(cfg.JwtSecret)
-
-	handlerApp := &handler.Handler{
-		Logger:         log,
-		UserRepo:       repo.User,
-		ExperienceRepo: repo.Experience,
-		QuestionRepo:   repo.Question,
-		JwtKey:         cfg.JwtSecret,
-		JwtTTL:         time.Duration(cfg.JwtTTL) * time.Minute,
-		OpenAI:         openaiClient,
-		OpenAIModel:    cfg.OpenAIModel,
-		TokenMaker:     tokenMaker,
+	cryptoSvc, err := pkg.NewCrypto(cfg.AesSecretKey)
+	if err != nil {
+		sugar.Fatal("invalid crypto key: ", zap.Error(err))
 	}
+
+	hndl := handler.NewHandler(log, repo, tokenMaker, cryptoSvc, groqClient)
 
 	app := &application{
 		DB:         pool,
-		OpenAI:     openaiClient,
 		Logger:     log,
 		Config:     cfg,
 		Repository: repo,
-		Handler:    handlerApp,
+		Handler:    hndl,
 	}
 
 	if err := app.serve(); err != nil {

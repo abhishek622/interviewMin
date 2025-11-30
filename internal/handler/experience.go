@@ -7,103 +7,118 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/abhishek622/interviewMin/internal/openai"
+	"github.com/abhishek622/interviewMin/internal/fetcher"
+	"github.com/abhishek622/interviewMin/internal/groq"
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/gin-gonic/gin"
 )
 
-// CreateExperience handles the creation of a new interview experience
-// It fetches content from the source link (if provided), or uses raw text
-// Then it calls OpenAI to extract structured data
 func (h *Handler) CreateExperience(c *gin.Context) {
-	var req model.CreateExperienceRequest
+	var req model.CreateExperienceReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user := h.GetUserFromContext(c)
-	if user.UserID == "" {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	// 1. Get content to process
-	var contentToProcess string
-
-	// Logic:
-	// If source is personal or other, treat SourceLink as text input.
-	// If source is leetcode, gfg, reddit, treat SourceLink as URL and fetch.
-
-	isTextSource := req.Source == model.SourcePersonal || req.Source == model.SourceOther
-
-	if isTextSource {
-		contentToProcess = req.SourceLink
-	} else {
-		// Fetcher logic removed as it was using app.Fetcher which is not available in Handler yet.
-		contentToProcess = req.SourceLink
-	}
-
-	if contentToProcess == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "empty content"})
-		return
-	}
-
-	// 2. Call OpenAI to extract data
-	extracted, err := h.extractInfo(c.Request.Context(), contentToProcess)
+	inputHash, err := h.Crypto.Encrypt(req.RawInput)
 	if err != nil {
-		h.Logger.Sugar().Errorw("extraction failed", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ai processing failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt input"})
 		return
+	}
+
+	var contentToProcess string
+	var fetchedTitle string
+
+	if req.InputType == model.InputTypeURL {
+		res, err := fetcher.Fetch(req.RawInput, c.Request.UserAgent())
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("fetch failed: %v", err)})
+			return
+		}
+		contentToProcess = res.Content
+		fetchedTitle = res.Title
+	} else {
+		contentToProcess = req.RawInput
 	}
 
 	// Construct Metadata
 	metadata := map[string]interface{}{
-		"title":           extracted.Title,
-		"full_experience": extracted.FullExperience,
+		"title":           fetchedTitle,
+		"full_experience": contentToProcess,
 	}
 
-	exp := &model.Experience{
-		UserID:     user.UserID,
-		Company:    extracted.Company,
-		Position:   extracted.Position,
-		Source:     req.Source,
-		NoOfRound:  extracted.NoOfRound,
-		SourceLink: req.SourceLink,
-		Location:   extracted.Location,
-		Metadata:   metadata,
-	}
-
-	// Fallback for required fields if AI missed them
-	if exp.Company == "" {
-		exp.Company = "Unknown"
-	}
-	if exp.Position == "" {
-		exp.Position = "Unknown"
-	}
-
-	if err := h.ExperienceRepo.Create(c.Request.Context(), exp); err != nil {
+	// save initial input in db
+	expID, err := h.Repository.CreateExperience(c.Request.Context(), &model.Experience{
+		UserID:        claims.UserID,
+		InputType:     req.InputType,
+		RawInput:      req.RawInput,
+		InputHash:     inputHash,
+		ProcessStatus: model.ProcessStatusQueued,
+		Metadata:      metadata,
+	})
+	if err != nil {
 		h.Logger.Sugar().Errorw("failed to create experience", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create experience"})
 		return
 	}
 
-	// 5. Save Questions
-	if len(extracted.Questions) > 0 {
-		qs := make([]model.Question, len(extracted.Questions))
-		for i, q := range extracted.Questions {
-			qs[i] = model.Question{
-				ExpID:    exp.ExpID,
-				Question: q.Question,
-				Type:     q.Type,
+	// return success response
+	c.JSON(http.StatusOK, gin.H{"exp_id": expID, "metadata": metadata})
+
+	// background ai process
+	go func(eID int64, content string) {
+		ctx := context.Background()
+
+		// Update status to processing
+		_ = h.Repository.UpdateExperience(ctx, eID, map[string]interface{}{
+			"process_status": model.ProcessStatusProcessing,
+		})
+
+		extracted, err := h.extractInfo(ctx, content)
+		if err != nil {
+			h.Logger.Sugar().Errorw("extraction failed", "exp_id", eID, "err", err)
+			_ = h.Repository.UpdateExperience(ctx, eID, map[string]interface{}{
+				"process_status": model.ProcessStatusFailed,
+				"process_error":  err.Error(),
+			})
+			return
+		}
+
+		// Update experience with extracted data
+		updates := map[string]interface{}{
+			"process_status": model.ProcessStatusCompleted,
+			"company":        extracted.Company,
+			"position":       extracted.Position,
+			"no_of_round":    extracted.NoOfRound,
+			"location":       extracted.Location,
+		}
+
+		if err := h.Repository.UpdateExperience(ctx, eID, updates); err != nil {
+			h.Logger.Sugar().Errorw("failed to update experience", "exp_id", eID, "err", err)
+		}
+
+		// Save Questions
+		if len(extracted.Questions) > 0 {
+			qs := make([]model.Question, len(extracted.Questions))
+			for i, q := range extracted.Questions {
+				qs[i] = model.Question{
+					ExpID:    eID,
+					Question: q.Question,
+					Type:     q.Type,
+				}
+			}
+			if err := h.Repository.CreateQuestions(ctx, qs); err != nil {
+				h.Logger.Sugar().Errorw("failed to save questions", "exp_id", eID, "err", err)
 			}
 		}
-		if err := h.QuestionRepo.CreateBatch(c.Request.Context(), qs); err != nil {
-			h.Logger.Sugar().Errorw("failed to save question", "err", err)
-		}
-	}
 
-	c.JSON(http.StatusOK, gin.H{"exp_id": exp.ExpID})
+	}(*expID, contentToProcess)
 }
 
 func (h *Handler) ListExperiences(c *gin.Context) {
@@ -113,8 +128,8 @@ func (h *Handler) ListExperiences(c *gin.Context) {
 		return
 	}
 
-	user := h.GetUserFromContext(c)
-	if user.UserID == "" {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -128,7 +143,7 @@ func (h *Handler) ListExperiences(c *gin.Context) {
 		offset = 0
 	}
 
-	exps, total, err := h.ExperienceRepo.ListByUser(c.Request.Context(), user.UserID, limit, offset)
+	exps, total, err := h.Repository.ListExperienceByUser(c.Request.Context(), claims.UserID, limit, offset)
 	if err != nil {
 		h.Logger.Sugar().Warnw("create experience bad request", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -156,14 +171,15 @@ func (h *Handler) GetExperience(c *gin.Context) {
 		return
 	}
 
-	exp, err := h.ExperienceRepo.GetByID(c.Request.Context(), id)
+	exp, err := h.Repository.GetExperienceByID(c.Request.Context(), id)
 	if err != nil {
+		h.Logger.Sugar().Errorw("failed to get experience", "id", id, "err", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "experience not found"})
 		return
 	}
 
 	// Fetch questions
-	qs, err := h.QuestionRepo.ListByExperienceID(c.Request.Context(), id)
+	qs, err := h.Repository.ListQuestionByExperienceID(c.Request.Context(), id)
 	if err != nil {
 		h.Logger.Sugar().Warnw("failed to fetch questions", "err", err)
 	}
@@ -213,14 +229,13 @@ func (h *Handler) extractInfo(ctx context.Context, content string) (*ExtractedDa
 		userPrompt = userPrompt[:10000]
 	}
 
-	chatReq := openai.ChatRequest{
-		Model:       h.OpenAIModel,
+	chatReq := groq.ChatRequest{
 		Messages:    []map[string]string{{"role": "system", "content": systemMsg}, {"role": "user", "content": userPrompt}},
 		MaxTokens:   2000,
 		Temperature: 0.0,
 	}
 
-	respStr, err := h.OpenAI.Chat(ctx, chatReq)
+	respStr, err := h.GroqClient.Chat(ctx, chatReq)
 	if err != nil {
 		return nil, err
 	}

@@ -13,17 +13,41 @@ func (app *application) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, err := verifyClaimsFromAuthHeader(c, app.Handler.TokenMaker)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Inavlid token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		}
-		userId := claims.ID
-		user, err := app.Repository.User.GetByID(c.Request.Context(), userId)
+
+		// Check if user still exists
+		_, err = app.Repository.GetUserByID(c.Request.Context(), claims.UserID)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized access"})
+			c.Abort()
 			return
 		}
-		c.Set("user", &user)
+
+		c.Set("claims", claims)
+		c.Next()
+	}
+}
+
+func (app *application) AdminAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, err := verifyClaimsFromAuthHeader(c, app.Handler.TokenMaker)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
+
+		user, err := app.Repository.GetUserByID(c.Request.Context(), claims.UserID)
+		if err != nil || !user.IsAdmin {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized access"})
+			c.Abort()
+			return
+		}
+
+		c.Set("claims", claims)
 		c.Next()
 	}
 }

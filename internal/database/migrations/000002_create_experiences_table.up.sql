@@ -3,26 +3,25 @@ CREATE TABLE IF NOT EXISTS experiences (
     user_id       UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
 
     -- user-provided input
-    input_type      TEXT NOT NULL DEFAULT 'url',    -- url | text
+    input_type      VARCHAR(10) NOT NULL DEFAULT 'url',    -- url | text
     raw_input       TEXT NOT NULL,                  -- original input
     input_hash      TEXT NOT NULL,                  -- sha256(raw_input)
 
     -- async processing
-    process_status  TEXT NOT NULL DEFAULT 'queued', -- queued | processing | completed | failed
+    process_status  VARCHAR(20) NOT NULL DEFAULT 'queued', -- queued | processing | completed | failed
     process_error   TEXT,
     attempts        INT NOT NULL DEFAULT 0,
 
     -- extracted before AI
-    extracted_title    TEXT,
+    extracted_title    VARCHAR(255),
     extracted_content  TEXT,
 
     -- final user-facing fields
-    company        TEXT,
-    position       TEXT,
-    source         TEXT NOT NULL,
+    company        VARCHAR(255),
+    position       VARCHAR(255),
     no_of_round    INT,
     metadata       JSONB DEFAULT NULL, -- ai output
-    location       TEXT,
+    location       VARCHAR(255),
 
     search_tsv     TSVECTOR NOT NULL DEFAULT ''::tsvector,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
