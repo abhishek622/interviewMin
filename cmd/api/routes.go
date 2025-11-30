@@ -28,12 +28,19 @@ func (app *application) routes() http.Handler {
 	protected.Use(app.AuthMiddleware())
 	{
 		protected.GET("/me", app.Handler.Me)
+		protected.POST("/logout", app.Handler.Logout)
 
 		// experience routes
 		protected.POST("/experiences", app.Handler.CreateExperience)
 		protected.GET("/experiences", app.Handler.ListExperiences)
 		protected.GET("/experiences/:id", app.Handler.GetExperience)
+	}
 
+	session := v1.Group("/tokens")
+	session.Use(app.AdminAuthMiddleware())
+	{
+		session.POST("/revoke", app.Handler.RevokeSession)
+		session.POST("/renew", app.Handler.RenewAccessToken)
 	}
 
 	return r

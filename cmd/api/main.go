@@ -6,10 +6,11 @@ import (
 	"github.com/abhishek622/interviewMin/internal/auth"
 	"github.com/abhishek622/interviewMin/internal/config"
 	"github.com/abhishek622/interviewMin/internal/database"
+	"github.com/abhishek622/interviewMin/internal/groq"
 	"github.com/abhishek622/interviewMin/internal/handler"
 	"github.com/abhishek622/interviewMin/internal/logger"
-	"github.com/abhishek622/interviewMin/internal/openai"
 	"github.com/abhishek622/interviewMin/internal/repository"
+	"github.com/abhishek622/interviewMin/pkg"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/joho/godotenv/autoload"
 	"go.uber.org/zap"
@@ -17,7 +18,6 @@ import (
 
 type application struct {
 	DB         *pgxpool.Pool
-	OpenAI     *openai.Client
 	Logger     *zap.Logger
 	Config     *config.Config
 	Repository *repository.Repository
@@ -42,14 +42,20 @@ func main() {
 	}
 	defer pool.Close()
 
-	openaiClient := openai.NewClient(cfg.OpenAIKey)
 	repo := repository.NewRepository(pool)
 	tokenMaker := auth.NewJWTMaker(cfg.JwtSecret)
-	hndl := handler.NewHandler(log, repo, openaiClient, cfg.OpenAIModel, tokenMaker)
+
+	cryptoSvc, err := pkg.NewCrypto(cfg.AesSecretKey)
+	if err != nil {
+		sugar.Fatal("invalid crypto key", zap.Error(err))
+	}
+
+	groqClient := groq.NewClient(cfg.GroqAPIKey, cfg.AIModel)
+
+	hndl := handler.NewHandler(log, repo, tokenMaker, cryptoSvc, groqClient)
 
 	app := &application{
 		DB:         pool,
-		OpenAI:     openaiClient,
 		Logger:     log,
 		Config:     cfg,
 		Repository: repo,

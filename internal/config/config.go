@@ -6,16 +6,13 @@ type Config struct {
 	Env  string `default:"dev"`
 	Port string `default:"8080"`
 
-	DatabaseURL   string `envconfig:"DATABASE_URL" required:"true"`
-	RedisAddr     string `envconfig:"REDIS_ADDR" default:"localhost:6379"`
-	RedisPassword string `envconfig:"REDIS_PASSWORD"`
-	RedisDB       int    `envconfig:"REDIS_DB" default:"0"`
+	DatabaseURL string `envconfig:"DATABASE_URL" required:"true"`
 
-	JwtSecret string `envconfig:"JWT_SECRET" required:"true"`
-	JwtTTL    int    `envconfig:"JWT_TTL_MINUTES" default:"60"`
+	JwtSecret    string `envconfig:"JWT_SECRET" required:"true"`
+	AesSecretKey string `envconfig:"AES_SECRET_KEY" required:"true"`
 
-	OpenAIKey   string `envconfig:"OPENAI_API_KEY"`
-	OpenAIModel string `envconfig:"OPENAI_MODEL" default:"gpt-3.5-turbo"`
+	GroqAPIKey string `envconfig:"GROQ_API_KEY" required:"true"`
+	AIModel    string `envconfig:"AI_MODEL" default:"meta-llama/llama-4-maverick-17b-128e-instruct"`
 }
 
 func Load() (*Config, error) {

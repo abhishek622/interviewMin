@@ -9,36 +9,74 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (r *Repository) CreateExperience(ctx context.Context, exp *model.Experience) error {
+func (r *Repository) CreateExperience(ctx context.Context, exp *model.Experience) (*int64, error) {
 	const q = `
 INSERT INTO experiences (
-	 user_id, company, position, source, no_of_round, 
-	source_link, location, metadata
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	 user_id, input_type, raw_input, input_hash, process_status
+) VALUES ($1, $2, $3, $4, $5) RETURNING exp_id
 `
-	_, err := r.db.Exec(ctx, q,
-		exp.UserID, exp.Company, exp.Position, exp.Source, exp.NoOfRound,
-		exp.SourceLink, exp.Location, exp.Metadata,
+	row := r.db.QueryRow(ctx, q,
+		exp.UserID, exp.InputType, exp.RawInput, exp.InputHash, exp.ProcessStatus,
 	)
-	if err != nil {
-		return fmt.Errorf("insert experience: %w", err)
+	var expID int64
+	if err := row.Scan(&expID); err != nil {
+		return nil, fmt.Errorf("insert experience: %w", err)
 	}
+	return &expID, nil
+}
+
+func (r *Repository) UpdateExperience(ctx context.Context, expID int64, updates map[string]interface{}) error {
+	validCols := map[string]bool{
+		"process_status": true, "process_error": true, "company": true,
+		"position": true, "source": true, "no_of_round": true,
+		"location": true, "metadata": true,
+	}
+
+	query := "UPDATE experiences SET "
+	args := []interface{}{}
+	argId := 1
+
+	for col, val := range updates {
+		if !validCols[col] {
+			continue // Skip invalid columns
+		}
+
+		if argId > 1 {
+			query += ", "
+		}
+
+		// Append "column_name = $1", "column_name = $2", etc.
+		query += fmt.Sprintf("%s = $%d", col, argId)
+		args = append(args, val)
+		argId++
+	}
+
+	query += fmt.Sprintf(" WHERE exp_id = $%d", argId)
+	args = append(args, expID)
+
+	tag, err := r.db.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("update experience: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("experience not found")
+	}
+
 	return nil
 }
 
 func (r *Repository) GetExperienceByID(ctx context.Context, id int64) (*model.Experience, error) {
 	const q = `
 SELECT 
-	exp_id, user_id, company, position, source, no_of_round, 
-	source_link, location, metadata, created_at
-FROM experiences
-WHERE exp_id = $1
+	exp_id, input_type, raw_input, process_status, attempts, process_error, company, position, no_of_round, location, metadata, created_at, updated_at
+FROM experiences WHERE exp_id = $1
 `
 	var e model.Experience
 	row := r.db.QueryRow(ctx, q, id)
 	err := row.Scan(
-		&e.ExpID, &e.UserID, &e.Company, &e.Position, &e.Source, &e.NoOfRound,
-		&e.SourceLink, &e.Location, &e.Metadata, &e.CreatedAt,
+		&e.ExpID, &e.UserID, &e.InputType, &e.RawInput, &e.ProcessStatus, &e.Attempts,
+		&e.ProcessError, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -58,8 +96,7 @@ func (r *Repository) ListExperienceByUser(ctx context.Context, userID string, li
 
 	const q = `
 SELECT 
-	exp_id, user_id, company, position, source, no_of_round, 
-	source_link, location, metadata, created_at
+	exp_id, input_type, process_status, attempts, process_error, company, position, no_of_round, location, metadata
 FROM experiences
 WHERE user_id = $1
 ORDER BY created_at DESC
@@ -75,8 +112,8 @@ LIMIT $2 OFFSET $3
 	for rows.Next() {
 		var e model.Experience
 		if err := rows.Scan(
-			&e.ExpID, &e.UserID, &e.Company, &e.Position, &e.Source, &e.NoOfRound,
-			&e.SourceLink, &e.Location, &e.Metadata, &e.CreatedAt,
+			&e.ExpID, &e.InputType, &e.RawInput, &e.ProcessStatus, &e.Attempts,
+			&e.ProcessError, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan experience row: %w", err)
 		}

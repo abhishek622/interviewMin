@@ -95,9 +95,9 @@ FROM user_tokens WHERE user_token_id = $1
 	return &session, nil
 }
 
-func (r *Repository) RevokeUserSession(ctx context.Context, refreshToken string) error {
-	const q = `UPDATE user_tokens SET is_revoked = true WHERE refresh_token = $1`
-	_, err := r.db.Exec(ctx, q, refreshToken)
+func (r *Repository) RevokeUserSession(ctx context.Context, userTokenId string) error {
+	const q = `UPDATE user_tokens SET is_revoked = true WHERE user_token_id = $1`
+	_, err := r.db.Exec(ctx, q, userTokenId)
 	if err != nil {
 		return fmt.Errorf("revoke session: %w", err)
 	}

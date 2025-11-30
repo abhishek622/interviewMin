@@ -7,14 +7,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/abhishek622/interviewMin/internal/openai"
+	"github.com/abhishek622/interviewMin/internal/groq"
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/gin-gonic/gin"
 )
 
-// CreateExperience handles the creation of a new interview experience
-// It fetches content from the source link (if provided), or uses raw text
-// Then it calls OpenAI to extract structured data
 func (h *Handler) CreateExperience(c *gin.Context) {
 	var req model.CreateExperienceReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -28,82 +25,84 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 		return
 	}
 
-	// 1. Get content to process
-	var contentToProcess string
-
-	// Logic:
-	// If source is personal or other, treat SourceLink as text input.
-	// If source is leetcode, gfg, reddit, treat SourceLink as URL and fetch.
-
-	isTextSource := req.Source == model.SourcePersonal || req.Source == model.SourceOther
-
-	if isTextSource {
-		contentToProcess = req.SourceLink
-	} else {
-		// Fetcher logic removed as it was using app.Fetcher which is not available in Handler yet.
-		contentToProcess = req.SourceLink
-	}
-
-	if contentToProcess == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "empty content"})
-		return
-	}
-
-	// 2. Call OpenAI to extract data
-	extracted, err := h.extractInfo(c.Request.Context(), contentToProcess)
+	inputHash, err := h.Crypto.Encrypt(req.RawInput)
 	if err != nil {
-		h.Logger.Sugar().Errorw("extraction failed", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ai processing failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt input"})
 		return
 	}
 
-	// Construct Metadata
-	metadata := map[string]interface{}{
-		"title":           extracted.Title,
-		"full_experience": extracted.FullExperience,
-	}
-
-	exp := &model.Experience{
-		UserID:     claims.UserID,
-		Company:    extracted.Company,
-		Position:   extracted.Position,
-		Source:     req.Source,
-		NoOfRound:  extracted.NoOfRound,
-		SourceLink: req.SourceLink,
-		Location:   extracted.Location,
-		Metadata:   metadata,
-	}
-
-	// Fallback for required fields if AI missed them
-	if exp.Company == "" {
-		exp.Company = "Unknown"
-	}
-	if exp.Position == "" {
-		exp.Position = "Unknown"
-	}
-
-	if err := h.Repository.CreateExperience(c.Request.Context(), exp); err != nil {
+	// save initial input in db
+	expID, err := h.Repository.CreateExperience(c.Request.Context(), &model.Experience{
+		UserID:        claims.UserID,
+		InputType:     req.InputType,
+		RawInput:      req.RawInput,
+		InputHash:     inputHash,
+		ProcessStatus: model.ProcessStatusQueued,
+	})
+	if err != nil {
 		h.Logger.Sugar().Errorw("failed to create experience", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create experience"})
 		return
 	}
 
-	// 5. Save Questions
-	if len(extracted.Questions) > 0 {
-		qs := make([]model.Question, len(extracted.Questions))
-		for i, q := range extracted.Questions {
-			qs[i] = model.Question{
-				ExpID:    exp.ExpID,
-				Question: q.Question,
-				Type:     q.Type,
+	// return success response
+	c.JSON(http.StatusOK, gin.H{"exp_id": expID})
+
+	// background ai process
+	go func(eID int64, rawInput string) {
+		ctx := context.Background()
+
+		// Update status to processing
+		_ = h.Repository.UpdateExperience(ctx, eID, map[string]interface{}{
+			"process_status": model.ProcessStatusProcessing,
+		})
+
+		extracted, err := h.extractInfo(ctx, rawInput)
+		if err != nil {
+			h.Logger.Sugar().Errorw("extraction failed", "exp_id", eID, "err", err)
+			_ = h.Repository.UpdateExperience(ctx, eID, map[string]interface{}{
+				"process_status": model.ProcessStatusFailed,
+				"process_error":  err.Error(),
+			})
+			return
+		}
+
+		// Construct Metadata
+		metadata := map[string]interface{}{
+			"title":           extracted.Title,
+			"full_experience": extracted.FullExperience,
+		}
+
+		// Update experience with extracted data
+		updates := map[string]interface{}{
+			"process_status": model.ProcessStatusCompleted,
+			"company":        extracted.Company,
+			"position":       extracted.Position,
+			"no_of_round":    extracted.NoOfRound,
+			"location":       extracted.Location,
+			"metadata":       metadata,
+		}
+
+		if err := h.Repository.UpdateExperience(ctx, eID, updates); err != nil {
+			h.Logger.Sugar().Errorw("failed to update experience", "exp_id", eID, "err", err)
+		}
+
+		// Save Questions
+		if len(extracted.Questions) > 0 {
+			qs := make([]model.Question, len(extracted.Questions))
+			for i, q := range extracted.Questions {
+				qs[i] = model.Question{
+					ExpID:    eID,
+					Question: q.Question,
+					Type:     q.Type,
+				}
+			}
+			if err := h.Repository.CreateQuestions(ctx, qs); err != nil {
+				h.Logger.Sugar().Errorw("failed to save questions", "exp_id", eID, "err", err)
 			}
 		}
-		if err := h.Repository.CreateQuestions(c.Request.Context(), qs); err != nil {
-			h.Logger.Sugar().Errorw("failed to save question", "err", err)
-		}
-	}
 
-	c.JSON(http.StatusOK, gin.H{"exp_id": exp.ExpID})
+	}(*expID, req.RawInput)
 }
 
 func (h *Handler) ListExperiences(c *gin.Context) {
@@ -213,14 +212,13 @@ func (h *Handler) extractInfo(ctx context.Context, content string) (*ExtractedDa
 		userPrompt = userPrompt[:10000]
 	}
 
-	chatReq := openai.ChatRequest{
-		Model:       h.OpenAIModel,
+	chatReq := groq.ChatRequest{
 		Messages:    []map[string]string{{"role": "system", "content": systemMsg}, {"role": "user", "content": userPrompt}},
 		MaxTokens:   2000,
 		Temperature: 0.0,
 	}
 
-	respStr, err := h.OpenAI.Chat(ctx, chatReq)
+	respStr, err := h.GroqClient.Chat(ctx, chatReq)
 	if err != nil {
 		return nil, err
 	}

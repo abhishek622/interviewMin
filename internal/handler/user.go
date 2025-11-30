@@ -131,7 +131,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "user logged out successfully"})
 }
 
-func (h *Handler) RenewAccesToken(c *gin.Context) {
+func (h *Handler) RenewAccessToken(c *gin.Context) {
 	var req model.RenewAccessTokenReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -180,4 +180,19 @@ func (h *Handler) RenewAccesToken(c *gin.Context) {
 		AccessToken:          accessToken,
 		AccessTokenExpiresAt: accessClaims.RegisteredClaims.ExpiresAt.Time,
 	})
+}
+
+func (h *Handler) RevokeSession(c *gin.Context) {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	err := h.Repository.RevokeUserSession(c.Request.Context(), claims.RegisteredClaims.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not revoke session"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "session revoked successfully"})
 }
