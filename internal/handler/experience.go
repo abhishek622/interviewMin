@@ -16,14 +16,14 @@ import (
 // It fetches content from the source link (if provided), or uses raw text
 // Then it calls OpenAI to extract structured data
 func (h *Handler) CreateExperience(c *gin.Context) {
-	var req model.CreateExperienceRequest
+	var req model.CreateExperienceReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user := h.GetUserFromContext(c)
-	if user.UserID == "" {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -64,7 +64,7 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 	}
 
 	exp := &model.Experience{
-		UserID:     user.UserID,
+		UserID:     claims.UserID,
 		Company:    extracted.Company,
 		Position:   extracted.Position,
 		Source:     req.Source,
@@ -82,7 +82,7 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 		exp.Position = "Unknown"
 	}
 
-	if err := h.ExperienceRepo.Create(c.Request.Context(), exp); err != nil {
+	if err := h.Repository.CreateExperience(c.Request.Context(), exp); err != nil {
 		h.Logger.Sugar().Errorw("failed to create experience", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
@@ -98,7 +98,7 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 				Type:     q.Type,
 			}
 		}
-		if err := h.QuestionRepo.CreateBatch(c.Request.Context(), qs); err != nil {
+		if err := h.Repository.CreateQuestions(c.Request.Context(), qs); err != nil {
 			h.Logger.Sugar().Errorw("failed to save question", "err", err)
 		}
 	}
@@ -113,8 +113,8 @@ func (h *Handler) ListExperiences(c *gin.Context) {
 		return
 	}
 
-	user := h.GetUserFromContext(c)
-	if user.UserID == "" {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -128,7 +128,7 @@ func (h *Handler) ListExperiences(c *gin.Context) {
 		offset = 0
 	}
 
-	exps, total, err := h.ExperienceRepo.ListByUser(c.Request.Context(), user.UserID, limit, offset)
+	exps, total, err := h.Repository.ListExperienceByUser(c.Request.Context(), claims.UserID, limit, offset)
 	if err != nil {
 		h.Logger.Sugar().Warnw("create experience bad request", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -156,14 +156,14 @@ func (h *Handler) GetExperience(c *gin.Context) {
 		return
 	}
 
-	exp, err := h.ExperienceRepo.GetByID(c.Request.Context(), id)
+	exp, err := h.Repository.GetExperienceByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "experience not found"})
 		return
 	}
 
 	// Fetch questions
-	qs, err := h.QuestionRepo.ListByExperienceID(c.Request.Context(), id)
+	qs, err := h.Repository.ListQuestionByExperienceID(c.Request.Context(), id)
 	if err != nil {
 		h.Logger.Sugar().Warnw("failed to fetch questions", "err", err)
 	}

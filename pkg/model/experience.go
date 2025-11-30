@@ -25,7 +25,7 @@ type Experience struct {
 	CreatedAt  time.Time              `json:"created_at" db:"created_at"`
 }
 
-type CreateExperienceRequest struct {
+type CreateExperienceReq struct {
 	SourceLink string `json:"source_link" binding:"optional"`
 	Source     Source `json:"source" binding:"required"`
 	TextInput  string `json:"text_input" binding:"optional"`

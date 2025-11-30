@@ -9,13 +9,13 @@ import (
 )
 
 type UserClaims struct {
-	ID      string `json:"id"`
+	UserID  string `json:"user_id"`
 	Email   string `json:"email"`
 	IsAdmin bool   `json:"is_admin"`
 	jwt.RegisteredClaims
 }
 
-func NewUserClaims(id string, email string, isAdmin bool, duration time.Duration) (*UserClaims, error) {
+func NewUserClaims(user_id string, email string, isAdmin bool, duration time.Duration) (*UserClaims, error) {
 	tokenID, err := uuid.NewRandom()
 	if err != nil {
 		return nil, fmt.Errorf("error generating token iD: %w", err)
@@ -23,7 +23,7 @@ func NewUserClaims(id string, email string, isAdmin bool, duration time.Duration
 
 	return &UserClaims{
 		Email:   email,
-		ID:      id,
+		UserID:  user_id,
 		IsAdmin: isAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID.String(),

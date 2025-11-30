@@ -6,14 +6,9 @@ import (
 
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type QuestionRepository struct {
-	db *pgxpool.Pool
-}
-
-func (r *QuestionRepository) CreateBatch(ctx context.Context, questions []model.Question) error {
+func (r *Repository) CreateQuestions(ctx context.Context, questions []model.Question) error {
 	if len(questions) == 0 {
 		return nil
 	}
@@ -39,7 +34,7 @@ func (r *QuestionRepository) CreateBatch(ctx context.Context, questions []model.
 	return nil
 }
 
-func (r *QuestionRepository) ListByExperienceID(ctx context.Context, expID int64) ([]model.Question, error) {
+func (r *Repository) ListQuestionByExperienceID(ctx context.Context, expID int64) ([]model.Question, error) {
 	const q = `
 SELECT q_id, exp_id, question, type, created_at
 FROM questions

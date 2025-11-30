@@ -12,25 +12,48 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
 
-type SignUpRequest struct {
+type SignUpReq struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
 	Name     string `json:"name" binding:"required,min=2"`
 }
 
-type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
-
-type UserResponse struct {
+type UserRes struct {
 	UserID  string `json:"user_id"`
 	Email   string `json:"email"`
 	Name    string `json:"name"`
 	IsAdmin bool   `json:"is_admin"`
 }
 
-type TokenResponse struct {
-	AccessToken string `json:"access_token"`
-	ExpiresAt   int64  `json:"expires_at"` // unix seconds
+type UserToken struct {
+	UserTokenID  string    `json:"user_token_id"`
+	UserID       string    `json:"user_id"`
+	RefreshToken string    `json:"refresh_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	DeviceInfo   string    `json:"device_info"`
+	IsRevoked    bool      `json:"is_revoked"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type LoginUserRes struct {
+	SessionID             string    `json:"session_id"`
+	AccessToken           string    `json:"access_token"`
+	RefreshToken          string    `json:"refresh_token"`
+	AccessTokenExpiresAt  time.Time `json:"access_token_expires_at"`
+	RefreshTokenExpiresAt time.Time `json:"refresh_token_expires_at"`
+	User                  UserRes   `json:"user"`
+}
+
+type LoginReq struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
+}
+
+type RenewAccessTokenReq struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type RenewAccessTokenRes struct {
+	AccessToken          string    `json:"access_token"`
+	AccessTokenExpiresAt time.Time `json:"access_token_expires_at"`
 }

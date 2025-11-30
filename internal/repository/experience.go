@@ -7,14 +7,9 @@ import (
 
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type ExperienceRepository struct {
-	db *pgxpool.Pool
-}
-
-func (r *ExperienceRepository) Create(ctx context.Context, exp *model.Experience) error {
+func (r *Repository) CreateExperience(ctx context.Context, exp *model.Experience) error {
 	const q = `
 INSERT INTO experiences (
 	 user_id, company, position, source, no_of_round, 
@@ -31,7 +26,7 @@ INSERT INTO experiences (
 	return nil
 }
 
-func (r *ExperienceRepository) GetByID(ctx context.Context, id int64) (*model.Experience, error) {
+func (r *Repository) GetExperienceByID(ctx context.Context, id int64) (*model.Experience, error) {
 	const q = `
 SELECT 
 	exp_id, user_id, company, position, source, no_of_round, 
@@ -54,7 +49,7 @@ WHERE exp_id = $1
 	return &e, nil
 }
 
-func (r *ExperienceRepository) ListByUser(ctx context.Context, userID string, limit, offset int) ([]model.Experience, int, error) {
+func (r *Repository) ListExperienceByUser(ctx context.Context, userID string, limit, offset int) ([]model.Experience, int, error) {
 	var total int
 	const countQ = `SELECT COUNT(*) FROM experiences WHERE user_id = $1`
 	if err := r.db.QueryRow(ctx, countQ, userID).Scan(&total); err != nil {
