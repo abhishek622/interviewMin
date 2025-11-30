@@ -112,7 +112,14 @@ func (h *Handler) Me(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	c.JSON(http.StatusOK, model.UserRes{UserID: claims.UserID, Email: claims.Email, IsAdmin: claims.IsAdmin})
+
+	user, err := h.Repository.GetUserByID(c.Request.Context(), claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, model.UserRes{UserID: user.UserID, Name: user.Name, Email: user.Email, IsAdmin: user.IsAdmin})
 }
 
 func (h *Handler) Logout(c *gin.Context) {

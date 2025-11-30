@@ -12,3 +12,8 @@ migrate -path migrations -database "postgres://postgres:postgres@localhost:5432/
 ```bash
 migrate create -ext sql -dir ./migrations -seq create_questions_table
 ```
+
+3. Docker compose start
+```bash
+docker-compose up -d
+```

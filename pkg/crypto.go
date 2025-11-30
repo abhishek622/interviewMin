@@ -15,8 +15,8 @@ type Crypto struct {
 
 func NewCrypto(key string) (*Crypto, error) {
 	k := []byte(key)
-	if len(k) != 16 && len(k) != 24 && len(k) != 32 {
-		return nil, fmt.Errorf("invalid key size: must be 16, 24, or 32 bytes")
+	if len(k) != 32 {
+		return nil, fmt.Errorf("invalid key size: must be 32 bytes")
 	}
 	return &Crypto{key: k}, nil
 }

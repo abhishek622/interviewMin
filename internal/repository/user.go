@@ -67,11 +67,11 @@ FROM users WHERE user_id = $1
 
 func (r *Repository) CreateUserSession(ctx context.Context, session *model.UserToken) (*model.UserToken, error) {
 	const q = `
-INSERT INTO user_tokens (user_id, refresh_token, expires_at, device_info, is_revoked)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO user_tokens (user_token_id, user_id, refresh_token, expires_at, device_info, is_revoked)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING user_token_id
 `
-	row := r.db.QueryRow(ctx, q, session.UserID, session.RefreshToken, session.ExpiresAt, session.DeviceInfo, session.IsRevoked)
+	row := r.db.QueryRow(ctx, q, session.UserTokenID, session.UserID, session.RefreshToken, session.ExpiresAt, session.DeviceInfo, session.IsRevoked)
 	if err := row.Scan(&session.UserTokenID); err != nil {
 		return nil, fmt.Errorf("insert session: %w", err)
 	}

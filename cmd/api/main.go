@@ -43,14 +43,12 @@ func main() {
 	defer pool.Close()
 
 	repo := repository.NewRepository(pool)
+	groqClient := groq.NewClient(cfg.GroqAPIKey, cfg.AIModel)
 	tokenMaker := auth.NewJWTMaker(cfg.JwtSecret)
-
 	cryptoSvc, err := pkg.NewCrypto(cfg.AesSecretKey)
 	if err != nil {
-		sugar.Fatal("invalid crypto key", zap.Error(err))
+		sugar.Fatal("invalid crypto key: ", zap.Error(err))
 	}
-
-	groqClient := groq.NewClient(cfg.GroqAPIKey, cfg.AIModel)
 
 	hndl := handler.NewHandler(log, repo, tokenMaker, cryptoSvc, groqClient)
 

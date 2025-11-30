@@ -127,29 +127,3 @@ func GetLeetcodePost(topicID, userAgent, csrfToken string) (*LeetcodePostRespons
 		Content: strings.TrimSpace(article.Content),
 	}, nil
 }
-
-// --- Convenience wrapper: accepts a URL, validates, extracts topic ID and fetches post ---
-// func FetchPostFromURL(rawURL, csrfToken string) (*PostResult, error) {
-// 	tid, err := parseLeetCodeDiscussURL(rawURL)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	// Now fetch by topic id
-// 	return fetchLeetCodeDiscussionByTopicID(tid, csrfToken)
-// }
-
-// --- Example usage ---
-// func main() {
-// 	exampleURL := "https://leetcode.com/discuss/post/7378536/2-3-yoe-swe-in-india-looking-for-a-high-yglkl/"
-// 	csrfToken := "2GnMUN3zuLWe5im9bnbhN2M7DYrvw0J4" // replace this with your valid token (securely)
-
-// 	post, err := FetchPostFromURL(exampleURL, csrfToken)
-// 	if err != nil {
-// 		fmt.Println("error:", err)
-// 		return
-// 	}
-
-// 	// Print JSON for convenience
-// 	out, _ := json.MarshalIndent(post, "", "  ")
-// 	fmt.Println(string(out))
-// }

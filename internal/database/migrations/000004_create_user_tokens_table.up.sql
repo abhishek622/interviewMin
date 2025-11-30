@@ -4,10 +4,9 @@ CREATE TABLE IF NOT EXISTS user_tokens (
     refresh_token  TEXT NOT NULL, 
     device_info    VARCHAR(255),          
     expires_at     TIMESTAMPTZ NOT NULL,
-    is_revoked     BOOLEAN NOT NULL DEFAULT FALSE
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_revoked     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 
 CREATE INDEX idx_user_tokens_user_id ON user_tokens(user_id);
 CREATE INDEX idx_user_tokens_refresh_token ON user_tokens(refresh_token);

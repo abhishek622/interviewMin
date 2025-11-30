@@ -12,11 +12,11 @@ import (
 func (r *Repository) CreateExperience(ctx context.Context, exp *model.Experience) (*int64, error) {
 	const q = `
 INSERT INTO experiences (
-	 user_id, input_type, raw_input, input_hash, process_status
-) VALUES ($1, $2, $3, $4, $5) RETURNING exp_id
+	 user_id, input_type, raw_input, input_hash, process_status, metadata
+) VALUES ($1, $2, $3, $4, $5, $6) RETURNING exp_id
 `
 	row := r.db.QueryRow(ctx, q,
-		exp.UserID, exp.InputType, exp.RawInput, exp.InputHash, exp.ProcessStatus,
+		exp.UserID, exp.InputType, exp.RawInput, exp.InputHash, exp.ProcessStatus, exp.Metadata,
 	)
 	var expID int64
 	if err := row.Scan(&expID); err != nil {
@@ -69,7 +69,13 @@ func (r *Repository) UpdateExperience(ctx context.Context, expID int64, updates 
 func (r *Repository) GetExperienceByID(ctx context.Context, id int64) (*model.Experience, error) {
 	const q = `
 SELECT 
-	exp_id, input_type, raw_input, process_status, attempts, process_error, company, position, no_of_round, location, metadata, created_at, updated_at
+	exp_id, user_id, input_type, raw_input, process_status, attempts, 
+	COALESCE(process_error, ''), 
+	COALESCE(company, ''), 
+	COALESCE(position, ''), 
+	COALESCE(no_of_round, 0), 
+	COALESCE(location, ''), 
+	metadata, created_at, updated_at
 FROM experiences WHERE exp_id = $1
 `
 	var e model.Experience
@@ -96,7 +102,15 @@ func (r *Repository) ListExperienceByUser(ctx context.Context, userID string, li
 
 	const q = `
 SELECT 
-	exp_id, input_type, process_status, attempts, process_error, company, position, no_of_round, location, metadata
+	exp_id, input_type, raw_input, process_status, attempts, 
+	COALESCE(process_error, ''), 
+	COALESCE(company, ''), 
+	COALESCE(position, ''), 
+	COALESCE(no_of_round, 0), 
+	COALESCE(location, ''), 
+	metadata,
+	created_at,
+	updated_at
 FROM experiences
 WHERE user_id = $1
 ORDER BY created_at DESC
@@ -113,7 +127,7 @@ LIMIT $2 OFFSET $3
 		var e model.Experience
 		if err := rows.Scan(
 			&e.ExpID, &e.InputType, &e.RawInput, &e.ProcessStatus, &e.Attempts,
-			&e.ProcessError, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata,
+			&e.ProcessError, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt, &e.UpdatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan experience row: %w", err)
 		}

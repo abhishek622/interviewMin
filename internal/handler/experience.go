@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/abhishek622/interviewMin/internal/fetcher"
 	"github.com/abhishek622/interviewMin/internal/groq"
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,27 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 		return
 	}
 
+	var contentToProcess string
+	var fetchedTitle string
+
+	if req.InputType == model.InputTypeURL {
+		res, err := fetcher.Fetch(req.RawInput, c.Request.UserAgent())
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("fetch failed: %v", err)})
+			return
+		}
+		contentToProcess = res.Content
+		fetchedTitle = res.Title
+	} else {
+		contentToProcess = req.RawInput
+	}
+
+	// Construct Metadata
+	metadata := map[string]interface{}{
+		"title":           fetchedTitle,
+		"full_experience": contentToProcess,
+	}
+
 	// save initial input in db
 	expID, err := h.Repository.CreateExperience(c.Request.Context(), &model.Experience{
 		UserID:        claims.UserID,
@@ -38,6 +60,7 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 		RawInput:      req.RawInput,
 		InputHash:     inputHash,
 		ProcessStatus: model.ProcessStatusQueued,
+		Metadata:      metadata,
 	})
 	if err != nil {
 		h.Logger.Sugar().Errorw("failed to create experience", "err", err)
@@ -46,10 +69,10 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 	}
 
 	// return success response
-	c.JSON(http.StatusOK, gin.H{"exp_id": expID})
+	c.JSON(http.StatusOK, gin.H{"exp_id": expID, "metadata": metadata})
 
 	// background ai process
-	go func(eID int64, rawInput string) {
+	go func(eID int64, content string) {
 		ctx := context.Background()
 
 		// Update status to processing
@@ -57,7 +80,7 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 			"process_status": model.ProcessStatusProcessing,
 		})
 
-		extracted, err := h.extractInfo(ctx, rawInput)
+		extracted, err := h.extractInfo(ctx, content)
 		if err != nil {
 			h.Logger.Sugar().Errorw("extraction failed", "exp_id", eID, "err", err)
 			_ = h.Repository.UpdateExperience(ctx, eID, map[string]interface{}{
@@ -67,12 +90,6 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 			return
 		}
 
-		// Construct Metadata
-		metadata := map[string]interface{}{
-			"title":           extracted.Title,
-			"full_experience": extracted.FullExperience,
-		}
-
 		// Update experience with extracted data
 		updates := map[string]interface{}{
 			"process_status": model.ProcessStatusCompleted,
@@ -80,7 +97,6 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 			"position":       extracted.Position,
 			"no_of_round":    extracted.NoOfRound,
 			"location":       extracted.Location,
-			"metadata":       metadata,
 		}
 
 		if err := h.Repository.UpdateExperience(ctx, eID, updates); err != nil {
@@ -102,7 +118,7 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 			}
 		}
 
-	}(*expID, req.RawInput)
+	}(*expID, contentToProcess)
 }
 
 func (h *Handler) ListExperiences(c *gin.Context) {
@@ -157,6 +173,7 @@ func (h *Handler) GetExperience(c *gin.Context) {
 
 	exp, err := h.Repository.GetExperienceByID(c.Request.Context(), id)
 	if err != nil {
+		h.Logger.Sugar().Errorw("failed to get experience", "id", id, "err", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "experience not found"})
 		return
 	}
