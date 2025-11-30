@@ -54,7 +54,7 @@ WHERE exp_id = $1
 	return &e, nil
 }
 
-func (r *ExperienceRepository) ListByUser(ctx context.Context, userID int64, limit, offset int) ([]model.Experience, int, error) {
+func (r *ExperienceRepository) ListByUser(ctx context.Context, userID string, limit, offset int) ([]model.Experience, int, error) {
 	var total int
 	const countQ = `SELECT COUNT(*) FROM experiences WHERE user_id = $1`
 	if err := r.db.QueryRow(ctx, countQ, userID).Scan(&total); err != nil {

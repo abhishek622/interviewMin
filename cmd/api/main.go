@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"time"
 
+	"github.com/abhishek622/interviewMin/internal/auth"
 	"github.com/abhishek622/interviewMin/internal/config"
 	"github.com/abhishek622/interviewMin/internal/database"
 	"github.com/abhishek622/interviewMin/internal/handler"
@@ -43,6 +45,7 @@ func main() {
 
 	openaiClient := openai.NewClient(cfg.OpenAIKey)
 	repo := repository.NewRepository(pool)
+	tokenMaker := auth.NewJWTMaker(cfg.JwtSecret)
 
 	handlerApp := &handler.Handler{
 		Logger:         log,
@@ -50,9 +53,10 @@ func main() {
 		ExperienceRepo: repo.Experience,
 		QuestionRepo:   repo.Question,
 		JwtKey:         cfg.JwtSecret,
-		JwtTTL:         cfg.JwtTTL,
+		JwtTTL:         time.Duration(cfg.JwtTTL) * time.Minute,
 		OpenAI:         openaiClient,
 		OpenAIModel:    cfg.OpenAIModel,
+		TokenMaker:     tokenMaker,
 	}
 
 	app := &application{
