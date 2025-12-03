@@ -13,8 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (h *Handler) CreateExperience(c *gin.Context) {
-	var req model.CreateExperienceReq
+func (h *Handler) CreateInterview(c *gin.Context) {
+	var req model.CreateInterviewReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -54,7 +54,7 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 	}
 
 	// save initial input in db
-	expID, err := h.Repository.CreateExperience(c.Request.Context(), &model.Experience{
+	expID, err := h.Repository.CreateInterview(c.Request.Context(), &model.Interview{
 		UserID:        claims.UserID,
 		Source:        req.Source,
 		RawInput:      req.RawInput,
@@ -63,27 +63,27 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 		Metadata:      metadata,
 	})
 	if err != nil {
-		h.Logger.Sugar().Errorw("failed to create experience", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create experience"})
+		h.Logger.Sugar().Errorw("failed to create interview", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create interview"})
 		return
 	}
 
 	// return success response
-	c.JSON(http.StatusOK, gin.H{"exp_id": expID, "metadata": metadata})
+	c.JSON(http.StatusOK, gin.H{"interview_id": expID, "metadata": metadata})
 
 	// background ai process
 	go func(eID int64, content string) {
 		ctx := context.Background()
 
 		// Update status to processing
-		_ = h.Repository.UpdateExperience(ctx, eID, map[string]interface{}{
+		_ = h.Repository.UpdateInterview(ctx, eID, map[string]interface{}{
 			"process_status": model.ProcessStatusProcessing,
 		})
 
 		extracted, err := h.extractInfo(ctx, content)
 		if err != nil {
-			h.Logger.Sugar().Errorw("extraction failed", "exp_id", eID, "err", err)
-			_ = h.Repository.UpdateExperience(ctx, eID, map[string]interface{}{
+			h.Logger.Sugar().Errorw("extraction failed", "interview_id", eID, "err", err)
+			_ = h.Repository.UpdateInterview(ctx, eID, map[string]interface{}{
 				"process_status": model.ProcessStatusFailed,
 				"process_error":  err.Error(),
 			})
@@ -99,8 +99,8 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 			"location":       extracted.Location,
 		}
 
-		if err := h.Repository.UpdateExperience(ctx, eID, updates); err != nil {
-			h.Logger.Sugar().Errorw("failed to update experience", "exp_id", eID, "err", err)
+		if err := h.Repository.UpdateInterview(ctx, eID, updates); err != nil {
+			h.Logger.Sugar().Errorw("failed to update interview", "interview_id", eID, "err", err)
 		}
 
 		// Save Questions
@@ -121,8 +121,8 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 	}(*expID, contentToProcess)
 }
 
-func (h *Handler) ListExperiences(c *gin.Context) {
-	var q model.ListExperiencesQuery
+func (h *Handler) ListInterviews(c *gin.Context) {
+	var q model.ListInterviewQuery
 	if err := c.ShouldBindQuery(&q); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -138,14 +138,11 @@ func (h *Handler) ListExperiences(c *gin.Context) {
 	if limit <= 0 {
 		limit = 20
 	}
-	offset := (q.Page - 1) * limit
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max((q.Page-1)*limit, 0)
 
-	exps, total, err := h.Repository.ListExperienceByUser(c.Request.Context(), claims.UserID, limit, offset)
+	exps, total, err := h.Repository.ListInterviewByUser(c.Request.Context(), claims.UserID, limit, offset)
 	if err != nil {
-		h.Logger.Sugar().Warnw("create experience bad request", "err", err)
+		h.Logger.Sugar().Warnw("list interviews bad request", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -158,7 +155,7 @@ func (h *Handler) ListExperiences(c *gin.Context) {
 	})
 }
 
-func (h *Handler) GetExperience(c *gin.Context) {
+func (h *Handler) GetInterview(c *gin.Context) {
 	idStr := c.Param("id")
 	if idStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
@@ -171,15 +168,15 @@ func (h *Handler) GetExperience(c *gin.Context) {
 		return
 	}
 
-	exp, err := h.Repository.GetExperienceByID(c.Request.Context(), id)
+	exp, err := h.Repository.GetInterviewByID(c.Request.Context(), id)
 	if err != nil {
-		h.Logger.Sugar().Errorw("failed to get experience", "id", id, "err", err)
-		c.JSON(http.StatusNotFound, gin.H{"error": "experience not found"})
+		h.Logger.Sugar().Errorw("failed to get interview", "id", id, "err", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
 		return
 	}
 
 	// Fetch questions
-	qs, err := h.Repository.ListQuestionByExperienceID(c.Request.Context(), id)
+	qs, err := h.Repository.ListQuestionByInterviewID(c.Request.Context(), id)
 	if err != nil {
 		h.Logger.Sugar().Warnw("failed to fetch questions", "err", err)
 	}

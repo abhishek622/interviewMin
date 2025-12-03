@@ -34,7 +34,7 @@ func (r *Repository) CreateQuestions(ctx context.Context, questions []model.Ques
 	return nil
 }
 
-func (r *Repository) ListQuestionByExperienceID(ctx context.Context, expID int64) ([]model.Question, error) {
+func (r *Repository) ListQuestionByInterviewID(ctx context.Context, expID int64) ([]model.Question, error) {
 	const q = `
 SELECT q_id, exp_id, question, type, created_at
 FROM questions

@@ -31,9 +31,9 @@ func (app *application) routes() http.Handler {
 		protected.POST("/logout", app.Handler.Logout)
 
 		// experience routes
-		protected.POST("/experiences", app.Handler.CreateExperience)
-		protected.GET("/experiences/:id", app.Handler.GetExperience)
-		protected.GET("/experiences", app.Handler.ListExperiences)
+		protected.POST("/interview", app.Handler.CreateInterview)
+		protected.GET("/interview/:id", app.Handler.GetInterview)
+		protected.GET("/interview", app.Handler.ListInterviews)
 	}
 
 	session := v1.Group("/tokens")
