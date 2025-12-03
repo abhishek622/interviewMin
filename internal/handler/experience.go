@@ -35,7 +35,9 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 	var contentToProcess string
 	var fetchedTitle string
 
-	if req.InputType == model.InputTypeURL {
+	if req.Source == model.SourceOther || req.Source == model.SourcePersonal {
+		contentToProcess = req.RawInput
+	} else {
 		res, err := fetcher.Fetch(req.RawInput, c.Request.UserAgent())
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("fetch failed: %v", err)})
@@ -43,8 +45,6 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 		}
 		contentToProcess = res.Content
 		fetchedTitle = res.Title
-	} else {
-		contentToProcess = req.RawInput
 	}
 
 	// Construct Metadata
@@ -56,7 +56,7 @@ func (h *Handler) CreateExperience(c *gin.Context) {
 	// save initial input in db
 	expID, err := h.Repository.CreateExperience(c.Request.Context(), &model.Experience{
 		UserID:        claims.UserID,
-		InputType:     req.InputType,
+		Source:        req.Source,
 		RawInput:      req.RawInput,
 		InputHash:     inputHash,
 		ProcessStatus: model.ProcessStatusQueued,
