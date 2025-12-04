@@ -14,10 +14,10 @@ func (r *Repository) CreateQuestions(ctx context.Context, questions []model.Ques
 	}
 
 	batch := &pgx.Batch{}
-	const q = `INSERT INTO questions (exp_id, question, "type") VALUES ($1, $2, $3)`
+	const q = `INSERT INTO questions (interview_id, question, "type") VALUES ($1, $2, $3)`
 
 	for _, question := range questions {
-		batch.Queue(q, question.ExpID, question.Question, question.Type)
+		batch.Queue(q, question.InterviewID, question.Question, question.Type)
 	}
 
 	br := r.db.SendBatch(ctx, batch)
@@ -34,14 +34,14 @@ func (r *Repository) CreateQuestions(ctx context.Context, questions []model.Ques
 	return nil
 }
 
-func (r *Repository) ListQuestionByExperienceID(ctx context.Context, expID int64) ([]model.Question, error) {
+func (r *Repository) ListQuestionByInterviewID(ctx context.Context, interviewID int64) ([]model.Question, error) {
 	const q = `
-SELECT q_id, exp_id, question, type, created_at
+SELECT q_id, interview_id, question, type, created_at
 FROM questions
-WHERE exp_id = $1
+WHERE interview_id = $1
 ORDER BY created_at ASC
 `
-	rows, err := r.db.Query(ctx, q, expID)
+	rows, err := r.db.Query(ctx, q, interviewID)
 	if err != nil {
 		return nil, fmt.Errorf("query questions: %w", err)
 	}
@@ -50,7 +50,7 @@ ORDER BY created_at ASC
 	var out []model.Question
 	for rows.Next() {
 		var qs model.Question
-		if err := rows.Scan(&qs.QID, &qs.ExpID, &qs.Question, &qs.Type, &qs.CreatedAt); err != nil {
+		if err := rows.Scan(&qs.QID, &qs.InterviewID, &qs.Question, &qs.Type, &qs.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan question: %w", err)
 		}
 		out = append(out, qs)

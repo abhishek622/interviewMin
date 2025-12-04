@@ -1,9 +1,9 @@
-CREATE TABLE IF NOT EXISTS experiences (
-    exp_id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS interviews (
+    interview_id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id       UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
 
     -- user-provided input
-    input_type      VARCHAR(10) NOT NULL DEFAULT 'url',    -- url | text
+    source      VARCHAR(50) NOT NULL,   
     raw_input       TEXT NOT NULL,                  -- original input
     input_hash      TEXT NOT NULL,                  -- sha256(raw_input)
 
@@ -30,13 +30,13 @@ CREATE TABLE IF NOT EXISTS experiences (
 
 
 -- indexes
-CREATE INDEX IF NOT EXISTS idx_experiences_user ON experiences(user_id);
-CREATE INDEX IF NOT EXISTS idx_experiences_company ON experiences(company);
-CREATE INDEX IF NOT EXISTS idx_experiences_position ON experiences(position);
-CREATE INDEX IF NOT EXISTS idx_experiences_input_hash ON experiences(input_hash);
+CREATE INDEX IF NOT EXISTS idx_interviews_user ON interviews(user_id);
+CREATE INDEX IF NOT EXISTS idx_interviews_company ON interviews(company);
+CREATE INDEX IF NOT EXISTS idx_interviews_position ON interviews(position);
+CREATE INDEX IF NOT EXISTS idx_interviews_input_hash ON interviews(input_hash);
 
 -- trigger function to populate search_tsv from relevant columns
-CREATE OR REPLACE FUNCTION experiences_tsv_trigger() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION interviews_tsv_trigger() RETURNS trigger AS $$
 BEGIN
   NEW.search_tsv :=
     to_tsvector('english',
@@ -50,12 +50,12 @@ $$ LANGUAGE plpgsql;
 
 
 CREATE TRIGGER tsv_update
-BEFORE INSERT OR UPDATE ON experiences
-FOR EACH ROW EXECUTE FUNCTION experiences_tsv_trigger();
+BEFORE INSERT OR UPDATE ON interviews
+FOR EACH ROW EXECUTE FUNCTION interviews_tsv_trigger();
 
 -- GIN index for full-text search
-CREATE INDEX IF NOT EXISTS idx_experiences_tsv ON experiences USING GIN(search_tsv);
+CREATE INDEX IF NOT EXISTS idx_interviews_tsv ON interviews USING GIN(search_tsv);
 
-CREATE TRIGGER trigger_update_experiences
-BEFORE UPDATE ON experiences
+CREATE TRIGGER trigger_update_interviews
+BEFORE UPDATE ON interviews
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
