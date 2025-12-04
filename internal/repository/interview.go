@@ -2,11 +2,9 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/abhishek622/interviewMin/pkg/model"
-	"github.com/jackc/pgx/v5"
 )
 
 func (r *Repository) CreateInterview(ctx context.Context, exp *model.Interview) (*int64, error) {
@@ -69,7 +67,7 @@ func (r *Repository) UpdateInterview(ctx context.Context, interviewID int64, upd
 func (r *Repository) GetInterviewByID(ctx context.Context, interviewID int64) (*model.Interview, error) {
 	const q = `
 SELECT 
-	interview_id, source, raw_input, process_status, attempts,
+	interview_id, user_id, source, raw_input, process_status, attempts,
 	process_error, company, position, no_of_round, location, metadata,
 	created_at, updated_at FROM interviews WHERE interview_id = $1
 `
@@ -80,10 +78,7 @@ SELECT
 		&e.ProcessError, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt, &e.UpdatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("interview not found: %w", err)
-		}
-		return nil, fmt.Errorf("scan interview: %w", err)
+		return nil, err
 	}
 	return &e, nil
 }
@@ -97,7 +92,7 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID string, lim
 
 	const q = `
 SELECT 
-	interview_id, source, raw_input, process_status, attempts, 
+	interview_id, user_id, source, raw_input, process_status, attempts, 
 	process_error, company, position, no_of_round, location, metadata,
 	created_at, updated_at FROM interviews WHERE user_id = $1
 ORDER BY created_at DESC LIMIT $2 OFFSET $3
@@ -112,7 +107,7 @@ ORDER BY created_at DESC LIMIT $2 OFFSET $3
 	for rows.Next() {
 		var e model.Interview
 		if err := rows.Scan(
-			&e.InterviewID, &e.Source, &e.RawInput, &e.ProcessStatus, &e.Attempts,
+			&e.InterviewID, &e.UserID, &e.Source, &e.RawInput, &e.ProcessStatus, &e.Attempts,
 			&e.ProcessError, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt, &e.UpdatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan experience row: %w", err)
