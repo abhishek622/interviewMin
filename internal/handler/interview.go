@@ -192,3 +192,116 @@ func (h *Handler) GetInterview(c *gin.Context) {
 		"questions":  qs,
 	})
 }
+
+func (h *Handler) PatchInterview(c *gin.Context) {
+	idStr := c.Param("interview_id")
+	if idStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
+		return
+	}
+
+	interviewID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id format"})
+		return
+	}
+
+	currInterview, err := h.Repository.GetInterviewByID(c.Request.Context(), interviewID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
+		return
+	}
+
+	var req model.PatchInterviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	metadata := currInterview.Metadata
+	if req.Title != nil {
+		metadata["title"] = req.Title
+	}
+	if req.FullExperience != nil {
+		metadata["full_experience"] = req.FullExperience
+	}
+
+	updates := make(map[string]interface{})
+	if len(metadata) > 0 {
+		updates["metadata"] = metadata
+	}
+	if req.Company != nil {
+		updates["company"] = req.Company
+	}
+	if req.Position != nil {
+		updates["position"] = req.Position
+	}
+	if req.NoOfRound != nil {
+		updates["no_of_round"] = req.NoOfRound
+	}
+	if req.Location != nil {
+		updates["location"] = req.Location
+	}
+
+	if err := h.Repository.UpdateInterview(c.Request.Context(), interviewID, updates); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "interview updated successfully"})
+}
+
+// delete a interview exprience
+func (h *Handler) DeleteInterview(c *gin.Context) {
+	idStr := c.Param("interview_id")
+	if idStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
+		return
+	}
+
+	interviewID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id format"})
+		return
+	}
+
+	count, err := h.Repository.CheckInterviewExists(c.Request.Context(), []int64{interviewID})
+	if err != nil || count != 1 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
+		return
+	}
+
+	if err := h.Repository.DeleteInterview(c.Request.Context(), interviewID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "interview deleted successfully"})
+}
+
+// delete multiple interview expriences
+func (h *Handler) DeleteInterviews(c *gin.Context) {
+	var req model.DeleteInterviewsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	count, err := h.Repository.CheckInterviewExists(c.Request.Context(), req.InterviewIDs)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
+		return
+	}
+
+	if count != len(req.InterviewIDs) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Invalid interview IDs present in list"})
+		return
+	}
+
+	if err := h.Repository.DeleteInterviews(c.Request.Context(), req.InterviewIDs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "interviews deleted successfully"})
+}

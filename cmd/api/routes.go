@@ -18,6 +18,21 @@ func (app *application) routes() http.Handler {
 		app.Logger.Sugar().Infow("http", "method", c.Request.Method, "path", c.Request.URL.Path, "status", c.Writer.Status(), "duration", time.Since(start))
 	})
 
+	// CORS Middleware
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
+
 	v1 := r.Group("/api/v1")
 	{
 		v1.POST("/signup", app.Handler.SignUp)
@@ -36,6 +51,9 @@ func (app *application) routes() http.Handler {
 		protected.POST("/interviews", app.Handler.CreateInterview)
 		protected.GET("/interviews/:id", app.Handler.GetInterview)
 		protected.GET("/interviews", app.Handler.ListInterviews)
+		protected.PATCH("/interviews/:id", app.Handler.PatchInterview)
+		protected.DELETE("/interviews/:id", app.Handler.DeleteInterview)
+		protected.DELETE("/interviews", app.Handler.DeleteInterviews)
 
 		// question routes
 		protected.POST("/questions", app.Handler.CreateQuestion)

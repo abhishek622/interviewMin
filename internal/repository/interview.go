@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/abhishek622/interviewMin/pkg/model"
+	"github.com/jackc/pgx/v5"
 )
 
 func (r *Repository) CreateInterview(ctx context.Context, exp *model.Interview) (*int64, error) {
@@ -118,4 +119,49 @@ ORDER BY created_at DESC LIMIT $2 OFFSET $3
 		return nil, 0, fmt.Errorf("rows error: %w", rows.Err())
 	}
 	return out, total, nil
+}
+
+func (r *Repository) DeleteInterview(ctx context.Context, interviewID int64) error {
+	return r.execTx(ctx, func(tx pgx.Tx) error {
+		const q2 = `DELETE FROM questions WHERE interview_id = $1`
+		_, err := tx.Exec(ctx, q2, interviewID)
+		if err != nil {
+			return fmt.Errorf("delete questions: %w", err)
+		}
+
+		const q = `DELETE FROM interviews WHERE interview_id = $1`
+		_, err = tx.Exec(ctx, q, interviewID)
+		if err != nil {
+			return fmt.Errorf("delete interview: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func (r *Repository) DeleteInterviews(ctx context.Context, interviewIDs []int64) error {
+	return r.execTx(ctx, func(tx pgx.Tx) error {
+		const qQuestions = `DELETE FROM questions WHERE interview_id = ANY($1)`
+		_, err := tx.Exec(ctx, qQuestions, interviewIDs)
+		if err != nil {
+			return fmt.Errorf("delete questions: %w", err)
+		}
+
+		const qInterviews = `DELETE FROM interviews WHERE interview_id = ANY($1)`
+		_, err = tx.Exec(ctx, qInterviews, interviewIDs)
+		if err != nil {
+			return fmt.Errorf("delete interview: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func (r *Repository) CheckInterviewExists(ctx context.Context, interviewIDs []int64) (int, error) {
+	var count int
+	const q = `SELECT COUNT(interview_id) FROM interviews WHERE interview_id = ANY($1)`
+	if err := r.db.QueryRow(ctx, q, interviewIDs).Scan(&count); err != nil {
+		return 0, fmt.Errorf("check interview exists: %w", err)
+	}
+	return count, nil
 }

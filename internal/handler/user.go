@@ -87,7 +87,7 @@ func (h *Handler) Login(c *gin.Context) {
 		UserID:       user.UserID,
 		RefreshToken: refreshToken,
 		ExpiresAt:    refreshClaims.RegisteredClaims.ExpiresAt.Time,
-		DeviceInfo:   "",
+		DeviceInfo:   c.Request.UserAgent(),
 		IsRevoked:    false,
 	})
 	if err != nil {

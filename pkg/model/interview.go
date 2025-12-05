@@ -48,3 +48,16 @@ type ListInterviewQuery struct {
 	Page     int `form:"page,default=1"`
 	PageSize int `form:"page_size,default=20"`
 }
+
+type DeleteInterviewsRequest struct {
+	InterviewIDs []int64 `json:"interview_ids" binding:"required,min=1,max=100"`
+}
+
+type PatchInterviewRequest struct {
+	Company        *string `json:"company,omitempty"`
+	Position       *string `json:"position,omitempty"`
+	NoOfRound      *int    `json:"no_of_round,omitempty" binding:"min=1,max=100"`
+	Location       *string `json:"location,omitempty"`
+	Title          *string `json:"title,omitempty"`
+	FullExperience *string `json:"full_experience,omitempty"`
+}
