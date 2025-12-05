@@ -9,22 +9,29 @@ import (
 )
 
 type UserClaims struct {
-	UserID  string `json:"user_id"`
-	Email   string `json:"email"`
-	IsAdmin bool   `json:"is_admin"`
+	UserID    string `json:"user_id"`
+	Email     string `json:"email"`
+	IsAdmin   bool   `json:"is_admin"`
+	SessionID string `json:"session_id"`
 	jwt.RegisteredClaims
 }
 
-func NewUserClaims(user_id string, email string, isAdmin bool, duration time.Duration) (*UserClaims, error) {
+func NewUserClaims(user_id string, email string, isAdmin bool, duration time.Duration, sessionID string) (*UserClaims, error) {
 	tokenID, err := uuid.NewRandom()
 	if err != nil {
 		return nil, fmt.Errorf("error generating token iD: %w", err)
 	}
 
+	finalSessionID := sessionID
+	if finalSessionID == "" {
+		finalSessionID = tokenID.String()
+	}
+
 	return &UserClaims{
-		Email:   email,
-		UserID:  user_id,
-		IsAdmin: isAdmin,
+		Email:     email,
+		UserID:    user_id,
+		IsAdmin:   isAdmin,
+		SessionID: finalSessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID.String(),
 			Subject:   email,

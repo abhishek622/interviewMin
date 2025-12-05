@@ -26,13 +26,13 @@ type UserRes struct {
 }
 
 type UserToken struct {
-	UserTokenID  string    `json:"user_token_id"`
-	UserID       string    `json:"user_id"`
-	RefreshToken string    `json:"refresh_token"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	DeviceInfo   string    `json:"device_info"`
-	IsRevoked    bool      `json:"is_revoked"`
-	CreatedAt    time.Time `json:"created_at"`
+	UserTokenID  string    `json:"user_token_id" db:"user_token_id"`
+	UserID       string    `json:"user_id" db:"user_id"`
+	RefreshToken string    `json:"refresh_token" db:"refresh_token"`
+	ExpiresAt    time.Time `json:"expires_at" db:"expires_at"`
+	DeviceInfo   string    `json:"device_info" db:"device_info"`
+	IsRevoked    bool      `json:"is_revoked" db:"is_revoked"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
 type LoginUserRes struct {

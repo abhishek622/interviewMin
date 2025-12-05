@@ -22,6 +22,7 @@ func (app *application) routes() http.Handler {
 	{
 		v1.POST("/signup", app.Handler.SignUp)
 		v1.POST("/login", app.Handler.Login)
+		v1.POST("/tokens/renew", app.Handler.RenewAccessToken)
 	}
 
 	protected := v1.Group("/")
@@ -29,18 +30,12 @@ func (app *application) routes() http.Handler {
 	{
 		protected.GET("/me", app.Handler.Me)
 		protected.POST("/logout", app.Handler.Logout)
+		protected.POST("/tokens/revoke", app.Handler.RevokeSession)
 
 		// experience routes
 		protected.POST("/interviews", app.Handler.CreateInterview)
 		protected.GET("/interviews/:id", app.Handler.GetInterview)
 		protected.GET("/interviews", app.Handler.ListInterviews)
-	}
-
-	session := v1.Group("/tokens")
-	session.Use(app.AuthMiddleware())
-	{
-		session.POST("/revoke", app.Handler.RevokeSession)
-		session.POST("/renew", app.Handler.RenewAccessToken)
 	}
 
 	return r

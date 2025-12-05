@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/abhishek622/interviewMin/internal/auth"
 	"github.com/gin-gonic/gin"
@@ -18,12 +19,20 @@ func (app *application) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Check if user still exists
-		_, err = app.Repository.GetUserByID(c.Request.Context(), claims.UserID)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized access"})
-			c.Abort()
-			return
+		// Verify session if SessionID is present (it should be for access tokens)
+		if claims.SessionID != "" {
+			session, err := app.Repository.GetUserSession(c.Request.Context(), claims.SessionID)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized access"})
+				c.Abort()
+				return
+			}
+
+			if session.IsRevoked || session.ExpiresAt.Before(time.Now().UTC()) || session.UserID != claims.UserID {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized access"})
+				c.Abort()
+				return
+			}
 		}
 
 		c.Set("claims", claims)

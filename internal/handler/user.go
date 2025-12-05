@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -65,14 +66,16 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	// create a json web token (JWT) and return it as response
-	accessToken, accessClaims, err := h.TokenMaker.GenerateToken(user.UserID, user.Email, user.IsAdmin, 60*time.Minute)
+	// Generate Refresh Token first to establish the session
+	refreshToken, refreshClaims, err := h.TokenMaker.GenerateToken(user.UserID, user.Email, user.IsAdmin, 24*time.Hour, "")
 	if err != nil {
 		h.Logger.Sugar().Errorw("error creating token", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return
 	}
 
-	refreshToken, refreshClaims, err := h.TokenMaker.GenerateToken(user.UserID, user.Email, user.IsAdmin, 24*time.Hour)
+	// Generate Access Token linked to the session
+	accessToken, accessClaims, err := h.TokenMaker.GenerateToken(user.UserID, user.Email, user.IsAdmin, 60*time.Minute, refreshClaims.RegisteredClaims.ID)
 	if err != nil {
 		h.Logger.Sugar().Errorw("error creating token", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
@@ -128,9 +131,9 @@ func (h *Handler) Logout(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-
-	// The ID in RegisteredClaims is the unique identifier for this user token
-	err := h.Repository.DeleteUserSession(c.Request.Context(), claims.RegisteredClaims.ID)
+	fmt.Println(claims.RegisteredClaims.ID)
+	// Use the SessionID from the claims (which links to the refresh token ID)
+	err := h.Repository.DeleteUserSession(c.Request.Context(), claims.SessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not revoke session"})
 		return
@@ -177,7 +180,7 @@ func (h *Handler) RenewAccessToken(c *gin.Context) {
 		return
 	}
 
-	accessToken, accessClaims, err := h.TokenMaker.GenerateToken(refreshClaims.UserID, refreshClaims.Email, refreshClaims.IsAdmin, 60*time.Minute)
+	accessToken, accessClaims, err := h.TokenMaker.GenerateToken(refreshClaims.UserID, refreshClaims.Email, refreshClaims.IsAdmin, 60*time.Minute, refreshClaims.RegisteredClaims.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate access token"})
 		return
@@ -196,7 +199,7 @@ func (h *Handler) RevokeSession(c *gin.Context) {
 		return
 	}
 
-	err := h.Repository.RevokeUserSession(c.Request.Context(), claims.RegisteredClaims.ID)
+	err := h.Repository.DeleteUserSession(c.Request.Context(), claims.SessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not revoke session"})
 		return
