@@ -84,21 +84,31 @@ SELECT
 	return &e, nil
 }
 
-func (r *Repository) ListInterviewByUser(ctx context.Context, userID string, limit, offset int) ([]model.Interview, int, error) {
+func (r *Repository) ListInterviewByUser(ctx context.Context, userID string, limit, offset int, filters map[string]interface{}) ([]model.Interview, int, error) {
 	var total int
-	const countQ = `SELECT COUNT(*) FROM interviews WHERE user_id = $1`
+	const countQ = `SELECT COUNT(1) FROM interviews WHERE user_id = $1`
 	if err := r.db.QueryRow(ctx, countQ, userID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count interview: %w", err)
 	}
 
-	const q = `
-SELECT 
+	q := `SELECT 
 	interview_id, user_id, source, raw_input, process_status, attempts, 
 	process_error, company, position, no_of_round, location, metadata,
 	created_at, updated_at FROM interviews WHERE user_id = $1
-ORDER BY created_at DESC LIMIT $2 OFFSET $3
 `
-	rows, err := r.db.Query(ctx, q, userID, limit, offset)
+	args := []interface{}{userID}
+	if len(filters) > 0 {
+		q += " AND "
+		for col, val := range filters {
+			q += fmt.Sprintf("%s = $%d", col, len(args)+1)
+			args = append(args, val)
+		}
+	}
+
+	q += " ORDER BY created_at DESC LIMIT $" + fmt.Sprintf("%d", len(args)+1) + " OFFSET $" + fmt.Sprintf("%d", len(args)+2)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query interview: %w", err)
 	}

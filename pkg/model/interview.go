@@ -44,9 +44,17 @@ type CreateInterviewReq struct {
 	Source   Source `json:"source" binding:"required"`
 }
 
+type Filter struct {
+	Source        *Source        `form:"source"`
+	ProcessStatus *ProcessStatus `form:"process_status"`
+	Company       *string        `form:"company"`
+	Position      *string        `form:"position"`
+}
+
 type ListInterviewQuery struct {
-	Page     int `form:"page,default=1"`
-	PageSize int `form:"page_size,default=20"`
+	Page     int     `form:"page,default=1"`
+	PageSize int     `form:"page_size,default=20"`
+	Filter   *Filter `form:"filter"`
 }
 
 type DeleteInterviewsRequest struct {

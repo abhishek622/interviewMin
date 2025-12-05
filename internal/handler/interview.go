@@ -142,7 +142,24 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 	}
 	offset := max((q.Page-1)*limit, 0)
 
-	exps, total, err := h.Repository.ListInterviewByUser(c.Request.Context(), claims.UserID, limit, offset)
+	// filters
+	filters := make(map[string]interface{})
+	if q.Filter != nil {
+		if q.Filter.Source != nil {
+			filters["source"] = *q.Filter.Source
+		}
+		if q.Filter.ProcessStatus != nil {
+			filters["process_status"] = *q.Filter.ProcessStatus
+		}
+		if q.Filter.Company != nil {
+			filters["company"] = *q.Filter.Company
+		}
+		if q.Filter.Position != nil {
+			filters["position"] = *q.Filter.Position
+		}
+	}
+
+	exps, total, err := h.Repository.ListInterviewByUser(c.Request.Context(), claims.UserID, limit, offset, filters)
 	if err != nil {
 		h.Logger.Sugar().Warnw("list interviews bad request", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
