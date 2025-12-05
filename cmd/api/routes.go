@@ -32,10 +32,16 @@ func (app *application) routes() http.Handler {
 		protected.POST("/logout", app.Handler.Logout)
 		protected.POST("/tokens/revoke", app.Handler.RevokeSession)
 
-		// experience routes
+		// interview routes
 		protected.POST("/interviews", app.Handler.CreateInterview)
 		protected.GET("/interviews/:id", app.Handler.GetInterview)
 		protected.GET("/interviews", app.Handler.ListInterviews)
+
+		// question routes
+		protected.POST("/questions", app.Handler.CreateQuestion)
+		protected.GET("/questions/:interview_id", app.Handler.ListQuestions)
+		protected.PUT("/questions/:q_id", app.Handler.UpdateQuestion)
+		protected.DELETE("/questions/:q_id", app.Handler.DeleteQuestion)
 	}
 
 	return r

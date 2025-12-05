@@ -22,3 +22,14 @@ type ListQuestionsQuery struct {
 	Page     int `form:"page,default=1"`
 	PageSize int `form:"page_size,default=20"`
 }
+
+type CreateQuestionReq struct {
+	InterviewID int64  `json:"interview_id"`
+	Question    string `json:"question"`
+	Type        string `json:"type"`
+}
+
+type UpdateQuestionReq struct {
+	Question string `json:"question"`
+	Type     string `json:"type"`
+}

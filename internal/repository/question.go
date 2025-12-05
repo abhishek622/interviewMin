@@ -57,3 +57,30 @@ ORDER BY created_at ASC
 	}
 	return out, nil
 }
+
+func (r *Repository) UpdateQuestion(ctx context.Context, qID int64, question string, questionType string) error {
+	const q = `UPDATE questions SET question = $1, "type" = $2 WHERE q_id = $3`
+	_, err := r.db.Exec(ctx, q, question, questionType, qID)
+	if err != nil {
+		return fmt.Errorf("update question: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) DeleteQuestion(ctx context.Context, qID int64) error {
+	const q = `DELETE FROM questions WHERE q_id = $1`
+	_, err := r.db.Exec(ctx, q, qID)
+	if err != nil {
+		return fmt.Errorf("delete question: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) CreateQuestion(ctx context.Context, question *model.Question) (*model.Question, error) {
+	const q = `INSERT INTO questions (interview_id, question, "type") VALUES ($1, $2, $3) RETURNING q_id`
+	err := r.db.QueryRow(ctx, q, question.InterviewID, question.Question, question.Type).Scan(&question.QID)
+	if err != nil {
+		return nil, fmt.Errorf("insert question: %w", err)
+	}
+	return question, nil
+}
