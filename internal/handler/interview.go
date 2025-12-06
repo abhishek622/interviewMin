@@ -151,15 +151,9 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 		if q.Filter.ProcessStatus != nil {
 			filters["process_status"] = *q.Filter.ProcessStatus
 		}
-		if q.Filter.Company != nil {
-			filters["company"] = *q.Filter.Company
-		}
-		if q.Filter.Position != nil {
-			filters["position"] = *q.Filter.Position
-		}
 	}
 
-	exps, total, err := h.Repository.ListInterviewByUser(c.Request.Context(), claims.UserID, limit, offset, filters)
+	exps, total, err := h.Repository.ListInterviewByUser(c.Request.Context(), claims.UserID, limit, offset, filters, q.Search)
 	if err != nil {
 		h.Logger.Sugar().Warnw("list interviews bad request", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -321,4 +315,20 @@ func (h *Handler) DeleteInterviews(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "interviews deleted successfully"})
+}
+
+func (h *Handler) GetInterviewStats(c *gin.Context){
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	stats, err := h.Repository.GetInterviewStats(c.Request.Context(), claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "interview stats fetched successfully","stats": stats})
 }

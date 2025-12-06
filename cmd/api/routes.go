@@ -49,6 +49,7 @@ func (app *application) routes() http.Handler {
 
 		// interview routes
 		protected.POST("/interviews", app.Handler.CreateInterview)
+		protected.GET("/interviews/stats", app.Handler.GetInterviewStats)
 		protected.GET("/interviews/:id", app.Handler.GetInterview)
 		protected.GET("/interviews", app.Handler.ListInterviews)
 		protected.PATCH("/interviews/:id", app.Handler.PatchInterview)

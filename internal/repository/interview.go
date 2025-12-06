@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/abhishek622/interviewMin/pkg/model"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -84,7 +85,7 @@ SELECT
 	return &e, nil
 }
 
-func (r *Repository) ListInterviewByUser(ctx context.Context, userID string, limit, offset int, filters map[string]interface{}) ([]model.Interview, int, error) {
+func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}, search *string) ([]model.Interview, int, error) {
 	var total int
 	const countQ = `SELECT COUNT(1) FROM interviews WHERE user_id = $1`
 	if err := r.db.QueryRow(ctx, countQ, userID).Scan(&total); err != nil {
@@ -103,6 +104,11 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID string, lim
 			q += fmt.Sprintf("%s = $%d", col, len(args)+1)
 			args = append(args, val)
 		}
+	}
+
+	if search != nil {
+		q += " AND (company ILIKE $" + fmt.Sprintf("%d", len(args)+1) + " OR position ILIKE $" + fmt.Sprintf("%d", len(args)+2) + ")"
+		args = append(args, "%"+*search+"%", "%"+*search+"%")
 	}
 
 	q += " ORDER BY created_at DESC LIMIT $" + fmt.Sprintf("%d", len(args)+1) + " OFFSET $" + fmt.Sprintf("%d", len(args)+2)
@@ -174,4 +180,87 @@ func (r *Repository) CheckInterviewExists(ctx context.Context, interviewIDs []in
 		return 0, fmt.Errorf("check interview exists: %w", err)
 	}
 	return count, nil
+}
+
+func (r *Repository) GetInterviewStats(ctx context.Context, userID uuid.UUID) (model.InterviewStats, error) {
+    const q = `
+    SELECT
+        -- 1. Counts 
+        COUNT(*) AS total_6_months,
+        COUNT(*) FILTER (WHERE source = 'personal') AS personal_6_months,
+
+        -- 2. This Month vs Last Month 
+        COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)) AS total_this_month,
+        COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') 
+                           AND created_at < DATE_TRUNC('month', CURRENT_DATE)) AS total_last_month,
+
+        COUNT(*) FILTER (WHERE source = 'personal' AND created_at >= DATE_TRUNC('month', CURRENT_DATE)) AS personal_this_month,
+        COUNT(*) FILTER (WHERE source = 'personal' AND created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') 
+                           AND created_at < DATE_TRUNC('month', CURRENT_DATE)) AS personal_last_month,
+
+        -- 3. Top Companies
+        COALESCE((
+            SELECT array_agg(t.company)
+            FROM (
+                SELECT company
+                FROM interviews
+                WHERE user_id = $1 
+                  AND company IS NOT NULL 
+                  AND company != ''
+                  AND created_at >= CURRENT_DATE - INTERVAL '6 months'
+                GROUP BY company
+                ORDER BY COUNT(*) DESC
+                LIMIT 5
+            ) t
+        ), '{}') AS top_companies
+    FROM interviews
+    WHERE user_id = $1 
+      AND created_at >= CURRENT_DATE - INTERVAL '6 months';
+    `
+
+    var (
+        stats             model.InterviewStats
+        totalThisMonth    int
+        totalLastMonth    int
+        personalThisMonth int
+        personalLastMonth int
+    )
+
+    err := r.db.QueryRow(ctx, q, userID).Scan(
+        &stats.Total,
+        &stats.Personal,
+        &totalThisMonth,
+        &totalLastMonth,
+        &personalThisMonth,
+        &personalLastMonth,
+        &stats.TopCompanies,
+    )
+
+    if err != nil {
+        return stats, fmt.Errorf("get interview stats: %w", err)
+    }
+
+    if stats.TopCompanies == nil {
+        stats.TopCompanies = []string{}
+    }
+
+    // Calculate Percentage Changes
+    stats.TotalChange = calculateGrowth(totalThisMonth, totalLastMonth)
+    stats.PersonalChange = calculateGrowth(personalThisMonth, personalLastMonth)
+
+    return stats, nil
+}
+
+// Helper function to calculate percentage growth safely
+func calculateGrowth(current, previous int) int {
+    if previous == 0 {
+        if current > 0 {
+            return 100 // 0 to 5 = 100% growth (technically infinite, but 100 is standard for UI)
+        }
+        return 0 // 0 to 0 = 0% change
+    }
+    // Formula: ((Current - Previous) / Previous) * 100
+    // We convert to float for division, then round back to int
+    delta := float64(current - previous)
+    return int((delta / float64(previous)) * 100)
 }

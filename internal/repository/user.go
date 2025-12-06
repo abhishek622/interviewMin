@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/abhishek622/interviewMin/pkg/model"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -49,13 +50,13 @@ WHERE email = $1
 	return u, nil
 }
 
-func (r *Repository) GetUserByID(ctx context.Context, id string) (model.User, error) {
+func (r *Repository) GetUserByID(ctx context.Context, userID uuid.UUID) (model.User, error) {
 	const q = `
 SELECT user_id, name, email, password_hash, is_admin, created_at, updated_at
 FROM users WHERE user_id = $1
 `
 	var u model.User
-	row := r.db.QueryRow(ctx, q, id)
+	row := r.db.QueryRow(ctx, q, userID)
 	if err := row.Scan(&u.UserID, &u.Name, &u.Email, &u.PasswordHash, &u.IsAdmin, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.User{}, fmt.Errorf("user not found: %w", err)

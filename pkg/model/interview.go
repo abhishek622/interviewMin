@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Source string
 
@@ -23,7 +27,7 @@ const (
 
 type Interview struct {
 	InterviewID   int64                  `json:"interview_id" db:"interview_id"`
-	UserID        string                 `json:"user_id" db:"user_id"`
+	UserID        uuid.UUID                 `json:"user_id" db:"user_id"`
 	Source        Source                 `json:"source" db:"source"`
 	RawInput      string                 `json:"raw_input" db:"raw_input"`
 	InputHash     string                 `json:"input_hash" db:"input_hash"`
@@ -47,13 +51,12 @@ type CreateInterviewReq struct {
 type Filter struct {
 	Source        *Source        `form:"source"`
 	ProcessStatus *ProcessStatus `form:"process_status"`
-	Company       *string        `form:"company"`
-	Position      *string        `form:"position"`
 }
 
 type ListInterviewQuery struct {
 	Page     int     `form:"page,default=1"`
 	PageSize int     `form:"page_size,default=20"`
+	Search   *string `form:"search"`
 	Filter   *Filter `form:"filter"`
 }
 
@@ -68,4 +71,12 @@ type PatchInterviewRequest struct {
 	Location       *string `json:"location,omitempty"`
 	Title          *string `json:"title,omitempty"`
 	FullExperience *string `json:"full_experience,omitempty"`
+}
+
+type InterviewStats struct {
+	Total          int      `json:"total"`
+	TotalChange    int      `json:"total_change"`    // Implied % change
+	Personal       int      `json:"personal"`
+	PersonalChange int      `json:"personal_change"` // Implied % change
+	TopCompanies   []string `json:"top_companies"`   
 }

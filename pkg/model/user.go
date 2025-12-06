@@ -1,9 +1,13 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type User struct {
-	UserID       string    `json:"user_id" db:"user_id"`
+	UserID       uuid.UUID    `json:"user_id" db:"user_id"`
 	Name         string    `json:"name" db:"name"`
 	Email        string    `json:"email" db:"email"`
 	PasswordHash string    `json:"-" db:"password_hash"`
@@ -19,7 +23,7 @@ type SignUpReq struct {
 }
 
 type UserRes struct {
-	UserID  string `json:"user_id"`
+	UserID  uuid.UUID `json:"user_id"`
 	Email   string `json:"email"`
 	Name    string `json:"name"`
 	IsAdmin bool   `json:"is_admin"`
@@ -27,7 +31,7 @@ type UserRes struct {
 
 type UserToken struct {
 	UserTokenID  string    `json:"user_token_id" db:"user_token_id"`
-	UserID       string    `json:"user_id" db:"user_id"`
+	UserID       uuid.UUID    `json:"user_id" db:"user_id"`
 	RefreshToken string    `json:"refresh_token" db:"refresh_token"`
 	ExpiresAt    time.Time `json:"expires_at" db:"expires_at"`
 	DeviceInfo   string    `json:"device_info" db:"device_info"`
