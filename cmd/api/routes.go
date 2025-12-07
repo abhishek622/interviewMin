@@ -20,7 +20,7 @@ func (app *application) routes() http.Handler {
 
 	// CORS Middleware
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
@@ -49,9 +49,10 @@ func (app *application) routes() http.Handler {
 
 		// interview routes
 		protected.POST("/interviews", app.Handler.CreateInterview)
+		protected.POST("/interviews/ai", app.Handler.CreateInterviewWithAI)
 		protected.GET("/interviews/stats", app.Handler.GetInterviewStats)
 		protected.GET("/interviews/:id", app.Handler.GetInterview)
-		protected.GET("/interviews", app.Handler.ListInterviews)
+		protected.POST("/interviews/list", app.Handler.ListInterviews)
 		protected.PATCH("/interviews/:id", app.Handler.PatchInterview)
 		protected.DELETE("/interviews/:id", app.Handler.DeleteInterview)
 		protected.DELETE("/interviews", app.Handler.DeleteInterviews)

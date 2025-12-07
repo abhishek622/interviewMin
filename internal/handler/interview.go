@@ -13,8 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (h *Handler) CreateInterview(c *gin.Context) {
-	var req model.CreateInterviewReq
+func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
+	var req model.CreateInterviewWithAIReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -123,6 +123,52 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 	}(*interviewID, contentToProcess)
 }
 
+func (h *Handler) CreateInterview(c *gin.Context) {
+	var req model.CreateInterviewReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	metadata := map[string]interface{}{
+		"title":           fmt.Sprintf("%s Interview at %s", req.Position, req.Company),
+		"full_experience": req.RawInput,
+	}
+
+	hashInput, err := h.Crypto.Encrypt(req.RawInput)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt raw input"})
+		return
+	}
+
+	createObj := model.Interview{
+		UserID:        claims.UserID,
+		Source:        req.Source,
+		RawInput:      req.RawInput,
+		InputHash:     hashInput,
+		ProcessStatus: model.ProcessStatusCompleted,
+		Metadata:      metadata,
+		Company:       &req.Company,
+		Position:      &req.Position,
+		NoOfRound:     req.NoOfRound,
+		Location:      req.Location,
+	}
+
+	interviewID, err := h.Repository.CreateFullInterview(c.Request.Context(), &createObj)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "interview created successfully", "interview_id": interviewID})
+}
+
 func (h *Handler) ListInterviews(c *gin.Context) {
 	var q model.ListInterviewQuery
 	if err := c.ShouldBindQuery(&q); err != nil {
@@ -199,8 +245,8 @@ func (h *Handler) GetInterview(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"experience": interview,
-		"questions":  qs,
+		"interview": interview,
+		"questions": qs,
 	})
 }
 
@@ -317,7 +363,7 @@ func (h *Handler) DeleteInterviews(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "interviews deleted successfully"})
 }
 
-func (h *Handler) GetInterviewStats(c *gin.Context){
+func (h *Handler) GetInterviewStats(c *gin.Context) {
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -330,5 +376,5 @@ func (h *Handler) GetInterviewStats(c *gin.Context){
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "interview stats fetched successfully","stats": stats})
+	c.JSON(http.StatusOK, gin.H{"message": "interview stats fetched successfully", "stats": stats})
 }

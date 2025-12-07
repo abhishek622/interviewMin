@@ -25,6 +25,22 @@ INSERT INTO interviews (
 	return &interviewID, nil
 }
 
+func (r *Repository) CreateFullInterview(ctx context.Context, exp *model.Interview) (*int64, error) {
+	const q = `
+INSERT INTO interviews (
+	 user_id, source, input_hash, raw_input, process_status, company, position, no_of_round, location, metadata
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING interview_id
+`
+	row := r.db.QueryRow(ctx, q,
+		exp.UserID, exp.Source, exp.InputHash, exp.RawInput, exp.ProcessStatus, exp.Company, exp.Position, exp.NoOfRound, exp.Location, exp.Metadata,
+	)
+	var interviewID int64
+	if err := row.Scan(&interviewID); err != nil {
+		return nil, fmt.Errorf("insert interview: %w", err)
+	}
+	return &interviewID, nil
+}
+
 func (r *Repository) UpdateInterview(ctx context.Context, interviewID int64, updates map[string]interface{}) error {
 	validCols := map[string]bool{
 		"process_status": true, "process_error": true, "company": true,
@@ -99,9 +115,8 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 `
 	args := []interface{}{userID}
 	if len(filters) > 0 {
-		q += " AND "
 		for col, val := range filters {
-			q += fmt.Sprintf("%s = $%d", col, len(args)+1)
+			q += fmt.Sprintf(" AND %s = ANY($%d)", col, len(args)+1)
 			args = append(args, val)
 		}
 	}

@@ -27,7 +27,7 @@ const (
 
 type Interview struct {
 	InterviewID   int64                  `json:"interview_id" db:"interview_id"`
-	UserID        uuid.UUID                 `json:"user_id" db:"user_id"`
+	UserID        uuid.UUID              `json:"user_id" db:"user_id"`
 	Source        Source                 `json:"source" db:"source"`
 	RawInput      string                 `json:"raw_input" db:"raw_input"`
 	InputHash     string                 `json:"input_hash" db:"input_hash"`
@@ -43,14 +43,23 @@ type Interview struct {
 	UpdatedAt     time.Time              `json:"updated_at" db:"updated_at"`
 }
 
-type CreateInterviewReq struct {
+type CreateInterviewWithAIReq struct {
 	RawInput string `json:"raw_input" binding:"required"`
 	Source   Source `json:"source" binding:"required"`
 }
 
+type CreateInterviewReq struct {
+	Source    Source  `json:"source" binding:"required"`
+	Company   string  `json:"company" binding:"required"`
+	Position  string  `json:"position" binding:"required"`
+	NoOfRound *int    `json:"no_of_round"`
+	Location  *string `json:"location"`
+	RawInput  string  `json:"raw_input" binding:"required"`
+}
+
 type Filter struct {
-	Source        *Source        `form:"source"`
-	ProcessStatus *ProcessStatus `form:"process_status"`
+	Source        *[]Source        `form:"source"`
+	ProcessStatus *[]ProcessStatus `form:"process_status"`
 }
 
 type ListInterviewQuery struct {
@@ -75,8 +84,8 @@ type PatchInterviewRequest struct {
 
 type InterviewStats struct {
 	Total          int      `json:"total"`
-	TotalChange    int      `json:"total_change"`    // Implied % change
+	TotalChange    int      `json:"total_change"` // Implied % change
 	Personal       int      `json:"personal"`
 	PersonalChange int      `json:"personal_change"` // Implied % change
-	TopCompanies   []string `json:"top_companies"`   
+	TopCompanies   []string `json:"top_companies"`
 }
