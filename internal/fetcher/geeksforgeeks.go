@@ -1,7 +1,6 @@
 package fetcher
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -35,13 +34,11 @@ func GetGfGPost(pageURL, userAgent string) (GfGPostResponse, error) {
 		return GfGPostResponse{}, err
 	}
 
-	// Extract title
 	title := strings.TrimSpace(doc.Find("h1.entry-title").First().Text())
 	if title == "" {
 		title = strings.TrimSpace(doc.Find("h1").First().Text())
 	}
 
-	// Extract Last Updated date
 	lastUpdated := ""
 	doc.Find("div.article--viewer_content time").Each(func(i int, s *goquery.Selection) {
 		if text := strings.TrimSpace(s.Text()); text != "" {
@@ -74,10 +71,7 @@ func GetGfGPost(pageURL, userAgent string) (GfGPostResponse, error) {
 		})
 	}
 
-	// Join content with proper spacing
 	content := strings.Join(contentParts, "\n\n")
-
-	// Final cleanup
 	content = cleanFinalContent(content)
 
 	return GfGPostResponse{
@@ -117,21 +111,4 @@ func cleanFinalContent(content string) string {
 	content = re.ReplaceAllString(content, "\n\n")
 
 	return strings.TrimSpace(content)
-}
-
-// Example usage
-func main() {
-	url := "https://www.geeksforgeeks.org/interview-experiences/lti-mindtree-interview-experience-on-campus-2024/"
-	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
-	result, err := GetGfGPost(url, userAgent)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Title: %s\n", result.Title)
-	fmt.Printf("URL: %s\n", result.URL)
-	fmt.Printf("Last Updated: %s\n", result.LastUpdated)
-	fmt.Printf("\nContent:\n%s\n", result.Content)
 }
