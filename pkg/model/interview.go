@@ -30,7 +30,6 @@ type Interview struct {
 	UserID        uuid.UUID              `json:"user_id" db:"user_id"`
 	Source        Source                 `json:"source" db:"source"`
 	RawInput      string                 `json:"raw_input" db:"raw_input"`
-	InputHash     string                 `json:"input_hash" db:"input_hash"`
 	ProcessStatus ProcessStatus          `json:"process_status" db:"process_status"`
 	ProcessError  *string                `json:"process_error" db:"process_error"`
 	Attempts      *int                   `json:"attempts" db:"attempts"`
@@ -88,4 +87,14 @@ type InterviewStats struct {
 	Personal       int      `json:"personal"`
 	PersonalChange int      `json:"personal_change"` // Implied % change
 	TopCompanies   []string `json:"top_companies"`
+}
+
+type ListStats struct {
+	Field string `json:"field"`
+	Count int    `json:"count"`
+}
+
+type InterviewListStats struct {
+	SourceStats        []ListStats `json:"source"`
+	ProcessStatusStats []ListStats `json:"process_status"`
 }

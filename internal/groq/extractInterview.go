@@ -45,7 +45,6 @@ From the provided interview text, extract:
 - **location**: city or country if mentioned
 - **no_of_round**: number of interview rounds (int). If unclear, 0.
 - **questions**: a list of extracted questions. These may be coding, DSA, behavioral, or system design.
-- **full_experience**: a cleaned version of the full interview experience, preserving meaning but removing noise.
 
 ---
 
@@ -82,7 +81,6 @@ Rules:
       "type": "dsa | system_design | behavioral | other"
     }
   ],
-  "full_experience": "string"
 }
 
 ---

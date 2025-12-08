@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/google/uuid"
@@ -12,11 +14,11 @@ import (
 func (r *Repository) CreateInterview(ctx context.Context, exp *model.Interview) (*int64, error) {
 	const q = `
 INSERT INTO interviews (
-	 user_id, source, raw_input, input_hash, process_status, metadata
-) VALUES ($1, $2, $3, $4, $5, $6) RETURNING interview_id
+	 user_id, source, raw_input, process_status, metadata
+) VALUES ($1, $2, $3, $4, $5) RETURNING interview_id
 `
 	row := r.db.QueryRow(ctx, q,
-		exp.UserID, exp.Source, exp.RawInput, exp.InputHash, exp.ProcessStatus, exp.Metadata,
+		exp.UserID, exp.Source, exp.RawInput, exp.ProcessStatus, exp.Metadata,
 	)
 	var interviewID int64
 	if err := row.Scan(&interviewID); err != nil {
@@ -28,11 +30,11 @@ INSERT INTO interviews (
 func (r *Repository) CreateFullInterview(ctx context.Context, exp *model.Interview) (*int64, error) {
 	const q = `
 INSERT INTO interviews (
-	 user_id, source, input_hash, raw_input, process_status, company, position, no_of_round, location, metadata
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING interview_id
+	 user_id, source, raw_input, process_status, company, position, no_of_round, location, metadata
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING interview_id
 `
 	row := r.db.QueryRow(ctx, q,
-		exp.UserID, exp.Source, exp.InputHash, exp.RawInput, exp.ProcessStatus, exp.Company, exp.Position, exp.NoOfRound, exp.Location, exp.Metadata,
+		exp.UserID, exp.Source, exp.RawInput, exp.ProcessStatus, exp.Company, exp.Position, exp.NoOfRound, exp.Location, exp.Metadata,
 	)
 	var interviewID int64
 	if err := row.Scan(&interviewID); err != nil {
@@ -102,34 +104,45 @@ SELECT
 }
 
 func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}, search *string) ([]model.Interview, int, error) {
-	var total int
-	const countQ = `SELECT COUNT(1) FROM interviews WHERE user_id = $1`
-	if err := r.db.QueryRow(ctx, countQ, userID).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count interview: %w", err)
-	}
-
-	q := `SELECT 
-	interview_id, user_id, source, raw_input, process_status, attempts, 
-	process_error, company, position, no_of_round, location, metadata,
-	created_at, updated_at FROM interviews WHERE user_id = $1
-`
+	// Base Query Construction
+	whereConditions := []string{"user_id = $1"}
 	args := []interface{}{userID}
+	argIndex := 2
+
 	if len(filters) > 0 {
 		for col, val := range filters {
-			q += fmt.Sprintf(" AND %s = ANY($%d)", col, len(args)+1)
+			whereConditions = append(whereConditions, fmt.Sprintf("%s = ANY($%d)", col, argIndex))
 			args = append(args, val)
+			argIndex++
 		}
 	}
 
-	if search != nil {
-		q += " AND (company ILIKE $" + fmt.Sprintf("%d", len(args)+1) + " OR position ILIKE $" + fmt.Sprintf("%d", len(args)+2) + ")"
-		args = append(args, "%"+*search+"%", "%"+*search+"%")
+	if search != nil && *search != "" {
+		searchPattern := "%" + *search + "%"
+		whereConditions = append(whereConditions, fmt.Sprintf("(company ILIKE $%d OR position ILIKE $%d)", argIndex, argIndex+1))
+		args = append(args, searchPattern, searchPattern)
+		argIndex += 2
 	}
 
-	q += " ORDER BY created_at DESC LIMIT $" + fmt.Sprintf("%d", len(args)+1) + " OFFSET $" + fmt.Sprintf("%d", len(args)+2)
-	args = append(args, limit, offset)
+	whereClause := strings.Join(whereConditions, " AND ")
 
-	rows, err := r.db.Query(ctx, q, args...)
+	// 1. Get Total Count
+	var total int
+	countQ := fmt.Sprintf("SELECT COUNT(1) FROM interviews WHERE %s", whereClause)
+	if err := r.db.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count interview: %w", err)
+	}
+
+	// 2. Get Data
+	listQ := fmt.Sprintf(`SELECT 
+	interview_id, user_id, source, raw_input, process_status, attempts, 
+	process_error, company, position, no_of_round, location, metadata,
+	created_at, updated_at FROM interviews WHERE %s
+	ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIndex, argIndex+1)
+
+	listArgs := append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, listQ, listArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query interview: %w", err)
 	}
@@ -150,6 +163,113 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 		return nil, 0, fmt.Errorf("rows error: %w", rows.Err())
 	}
 	return out, total, nil
+}
+
+func (r *Repository) ListInterviewByUserStats(ctx context.Context, userID uuid.UUID, filters map[string]interface{}, search *string) (*model.InterviewListStats, error) {
+	whereConditions := []string{"user_id = $1"}
+	args := []interface{}{userID}
+	argIndex := 2
+
+	if len(filters) > 0 {
+		for col, val := range filters {
+			whereConditions = append(whereConditions, fmt.Sprintf("%s = ANY($%d)", col, argIndex))
+			args = append(args, val)
+			argIndex++
+		}
+	}
+
+	if search != nil && *search != "" {
+		searchPattern := "%" + *search + "%"
+		whereConditions = append(whereConditions, fmt.Sprintf("(company ILIKE $%d OR position ILIKE $%d)", argIndex, argIndex+1))
+		args = append(args, searchPattern, searchPattern)
+		argIndex += 2
+	}
+
+	whereClause := strings.Join(whereConditions, " AND ")
+
+	query := fmt.Sprintf(`
+		WITH base_data AS (
+			SELECT source, process_status
+			FROM interviews
+			WHERE %s
+		),
+		source_counts AS (
+			SELECT source, COUNT(*) AS count
+			FROM base_data
+			GROUP BY source
+		),
+		status_counts AS (
+			SELECT process_status, COUNT(*) AS count
+			FROM base_data
+			GROUP BY process_status
+		)
+		SELECT 
+			(SELECT json_agg(json_build_object('field', source, 'count', count) ORDER BY count DESC) FROM source_counts) AS source_stats,
+			(SELECT json_agg(json_build_object('field', process_status, 'count', count) ORDER BY count DESC) FROM status_counts) AS status_stats
+	`, whereClause)
+
+	// Only need args once now since we're using a single base CTE
+	allArgs := args
+
+	var sourceStatsJSON, statusStatsJSON []byte
+
+	err := r.db.QueryRow(ctx, query, allArgs...).Scan(&sourceStatsJSON, &statusStatsJSON)
+	if err != nil {
+		return nil, fmt.Errorf("query stats: %w", err)
+	}
+
+	var sourceStats []model.ListStats
+	if sourceStatsJSON != nil {
+		if err := json.Unmarshal(sourceStatsJSON, &sourceStats); err != nil {
+			return nil, fmt.Errorf("unmarshal source stats: %w", err)
+		}
+	}
+
+	var statusStats []model.ListStats
+	if statusStatsJSON != nil {
+		if err := json.Unmarshal(statusStatsJSON, &statusStats); err != nil {
+			return nil, fmt.Errorf("unmarshal status stats: %w", err)
+		}
+	}
+
+	// Helper to fill missing keys with 0
+	fillMissing := func(current []model.ListStats, allKeys []string) []model.ListStats {
+		m := make(map[string]int)
+		for _, item := range current {
+			m[item.Field] = item.Count
+		}
+
+		out := make([]model.ListStats, 0, len(allKeys))
+		for _, key := range allKeys {
+			out = append(out, model.ListStats{
+				Field: key,
+				Count: m[key],
+			})
+		}
+		return out
+	}
+
+	allSources := []string{
+		string(model.SourceLeetcode),
+		string(model.SourceReddit),
+		string(model.SourceGFG),
+		string(model.SourceOther),
+		string(model.SourcePersonal),
+	}
+
+	allStatuses := []string{
+		string(model.ProcessStatusQueued),
+		string(model.ProcessStatusProcessing),
+		string(model.ProcessStatusCompleted),
+		string(model.ProcessStatusFailed),
+	}
+
+	result := &model.InterviewListStats{
+		SourceStats:        fillMissing(sourceStats, allSources),
+		ProcessStatusStats: fillMissing(statusStats, allStatuses),
+	}
+
+	return result, nil
 }
 
 func (r *Repository) DeleteInterview(ctx context.Context, interviewID int64) error {
@@ -198,7 +318,7 @@ func (r *Repository) CheckInterviewExists(ctx context.Context, interviewIDs []in
 }
 
 func (r *Repository) GetInterviewStats(ctx context.Context, userID uuid.UUID) (model.InterviewStats, error) {
-    const q = `
+	const q = `
     SELECT
         -- 1. Counts 
         COUNT(*) AS total_6_months,
@@ -233,49 +353,49 @@ func (r *Repository) GetInterviewStats(ctx context.Context, userID uuid.UUID) (m
       AND created_at >= CURRENT_DATE - INTERVAL '6 months';
     `
 
-    var (
-        stats             model.InterviewStats
-        totalThisMonth    int
-        totalLastMonth    int
-        personalThisMonth int
-        personalLastMonth int
-    )
+	var (
+		stats             model.InterviewStats
+		totalThisMonth    int
+		totalLastMonth    int
+		personalThisMonth int
+		personalLastMonth int
+	)
 
-    err := r.db.QueryRow(ctx, q, userID).Scan(
-        &stats.Total,
-        &stats.Personal,
-        &totalThisMonth,
-        &totalLastMonth,
-        &personalThisMonth,
-        &personalLastMonth,
-        &stats.TopCompanies,
-    )
+	err := r.db.QueryRow(ctx, q, userID).Scan(
+		&stats.Total,
+		&stats.Personal,
+		&totalThisMonth,
+		&totalLastMonth,
+		&personalThisMonth,
+		&personalLastMonth,
+		&stats.TopCompanies,
+	)
 
-    if err != nil {
-        return stats, fmt.Errorf("get interview stats: %w", err)
-    }
+	if err != nil {
+		return stats, fmt.Errorf("get interview stats: %w", err)
+	}
 
-    if stats.TopCompanies == nil {
-        stats.TopCompanies = []string{}
-    }
+	if stats.TopCompanies == nil {
+		stats.TopCompanies = []string{}
+	}
 
-    // Calculate Percentage Changes
-    stats.TotalChange = calculateGrowth(totalThisMonth, totalLastMonth)
-    stats.PersonalChange = calculateGrowth(personalThisMonth, personalLastMonth)
+	// Calculate Percentage Changes
+	stats.TotalChange = calculateGrowth(totalThisMonth, totalLastMonth)
+	stats.PersonalChange = calculateGrowth(personalThisMonth, personalLastMonth)
 
-    return stats, nil
+	return stats, nil
 }
 
 // Helper function to calculate percentage growth safely
 func calculateGrowth(current, previous int) int {
-    if previous == 0 {
-        if current > 0 {
-            return 100 // 0 to 5 = 100% growth (technically infinite, but 100 is standard for UI)
-        }
-        return 0 // 0 to 0 = 0% change
-    }
-    // Formula: ((Current - Previous) / Previous) * 100
-    // We convert to float for division, then round back to int
-    delta := float64(current - previous)
-    return int((delta / float64(previous)) * 100)
+	if previous == 0 {
+		if current > 0 {
+			return 100 // 0 to 5 = 100% growth (technically infinite, but 100 is standard for UI)
+		}
+		return 0 // 0 to 0 = 0% change
+	}
+	// Formula: ((Current - Previous) / Previous) * 100
+	// We convert to float for division, then round back to int
+	delta := float64(current - previous)
+	return int((delta / float64(previous)) * 100)
 }

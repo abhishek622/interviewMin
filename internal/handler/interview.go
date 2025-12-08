@@ -26,12 +26,6 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 		return
 	}
 
-	inputHash, err := h.Crypto.Encrypt(req.RawInput)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt input"})
-		return
-	}
-
 	var contentToProcess string
 	var fetchedTitle string
 
@@ -52,13 +46,14 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 		"title":           fetchedTitle,
 		"full_experience": contentToProcess,
 	}
+	// attach title to contentToProcess
+	contentToProcess = fmt.Sprintf("%s\n\n%s", fetchedTitle, contentToProcess)
 	// fmt.Println(metadata)
 	// save initial input in db
 	interviewID, err := h.Repository.CreateInterview(c.Request.Context(), &model.Interview{
 		UserID:        claims.UserID,
 		Source:        req.Source,
 		RawInput:      req.RawInput,
-		InputHash:     inputHash,
 		ProcessStatus: model.ProcessStatusQueued,
 		Metadata:      metadata,
 	})
@@ -141,17 +136,10 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 		"full_experience": req.RawInput,
 	}
 
-	hashInput, err := h.Crypto.Encrypt(req.RawInput)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt raw input"})
-		return
-	}
-
 	createObj := model.Interview{
 		UserID:        claims.UserID,
 		Source:        req.Source,
 		RawInput:      req.RawInput,
-		InputHash:     hashInput,
 		ProcessStatus: model.ProcessStatusCompleted,
 		Metadata:      metadata,
 		Company:       &req.Company,
@@ -171,7 +159,7 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 
 func (h *Handler) ListInterviews(c *gin.Context) {
 	var q model.ListInterviewQuery
-	if err := c.ShouldBindQuery(&q); err != nil {
+	if err := c.ShouldBindJSON(&q); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -211,6 +199,42 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 		"total":     total,
 		"page":      q.Page,
 		"page_size": limit,
+	})
+}
+
+func (h *Handler) ListInterviewStats(c *gin.Context) {
+	var q model.ListInterviewQuery
+	if err := c.ShouldBindJSON(&q); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// filters
+	filters := make(map[string]interface{})
+	if q.Filter != nil {
+		if q.Filter.Source != nil {
+			filters["source"] = *q.Filter.Source
+		}
+		if q.Filter.ProcessStatus != nil {
+			filters["process_status"] = *q.Filter.ProcessStatus
+		}
+	}
+
+	stats, err := h.Repository.ListInterviewByUserStats(c.Request.Context(), claims.UserID, filters, q.Search)
+	if err != nil {
+		h.Logger.Sugar().Warnw("list interviews stats bad request", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": stats,
 	})
 }
 
