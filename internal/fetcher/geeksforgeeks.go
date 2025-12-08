@@ -1,7 +1,10 @@
 package fetcher
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -111,4 +114,30 @@ func cleanFinalContent(content string) string {
 	content = re.ReplaceAllString(content, "\n\n")
 
 	return strings.TrimSpace(content)
+}
+
+func ParseGeeksforgeeksURL(raw string) (cleanURL string, err error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid url: %w", err)
+	}
+
+	host := strings.ToLower(u.Host)
+	if !(host == "geeksforgeeks.org" || host == "www.geeksforgeeks.org") {
+		return "", fmt.Errorf("url host must be geeksforgeeks.org, got %s", u.Host)
+	}
+
+	// Validate path format
+	// e.g - /interview-experiences/infosys-interview-experience-for-systems-engineer-trainee/
+	// Pattern: /interview-experiences/{topic-name}/
+	re := regexp.MustCompile(`^/interview-experiences/([\w-]+)/?$`)
+	m := re.FindStringSubmatch(u.Path)
+	if len(m) < 2 {
+		return "", errors.New("url path is not a valid geeksforgeeks interview experience url")
+	}
+
+	topicName := m[1]
+	cleanURL = fmt.Sprintf("%s://%s/interview-experiences/%s/", u.Scheme, u.Host, topicName)
+
+	return cleanURL, nil
 }

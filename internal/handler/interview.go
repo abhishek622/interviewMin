@@ -32,7 +32,7 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 	if req.Source == model.SourceOther || req.Source == model.SourcePersonal {
 		contentToProcess = req.RawInput
 	} else {
-		res, err := fetcher.Fetch(req.RawInput, c.Request.UserAgent())
+		res, err := fetcher.Fetch(req.RawInput, req.Source, c.Request.UserAgent())
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("fetch failed: %v", err)})
 			return
