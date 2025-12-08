@@ -122,6 +122,12 @@ func ParseGeeksforgeeksURL(raw string) (cleanURL string, err error) {
 		return "", fmt.Errorf("invalid url: %w", err)
 	}
 
+	// Validate scheme
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("url scheme must be http or https, got %s", u.Scheme)
+	}
+
+	// Validate host
 	host := strings.ToLower(u.Host)
 	if !(host == "geeksforgeeks.org" || host == "www.geeksforgeeks.org") {
 		return "", fmt.Errorf("url host must be geeksforgeeks.org, got %s", u.Host)
@@ -137,6 +143,8 @@ func ParseGeeksforgeeksURL(raw string) (cleanURL string, err error) {
 	}
 
 	topicName := m[1]
+
+	// Construct clean URL without query parameters
 	cleanURL = fmt.Sprintf("%s://%s/interview-experiences/%s/", u.Scheme, u.Host, topicName)
 
 	return cleanURL, nil
