@@ -57,15 +57,16 @@ type CreateInterviewReq struct {
 }
 
 type Filter struct {
-	Source        *[]Source        `form:"source"`
-	ProcessStatus *[]ProcessStatus `form:"process_status"`
+	Source        *[]Source        `json:"source" form:"source"`
+	ProcessStatus *[]ProcessStatus `json:"process_status" form:"process_status"`
+	Status        *[]ProcessStatus `json:"status" form:"status"` // Alias for ProcessStatus
 }
 
 type ListInterviewQuery struct {
-	Page     int     `form:"page,default=1"`
-	PageSize int     `form:"page_size,default=20"`
-	Search   *string `form:"search"`
-	Filter   *Filter `form:"filter"`
+	Page     int     `json:"page" form:"page,default=1"`
+	PageSize int     `json:"page_size" form:"page_size,default=20"`
+	Search   *string `json:"search" form:"search"`
+	Filter   *Filter `json:"filter" form:"filter"`
 }
 
 type DeleteInterviewsRequest struct {

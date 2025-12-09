@@ -178,12 +178,29 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 
 	// filters
 	filters := make(map[string]interface{})
+
 	if q.Filter != nil {
 		if q.Filter.Source != nil {
-			filters["source"] = *q.Filter.Source
+			// Create a slice of standard strings
+			sourceStrings := make([]string, len(*q.Filter.Source))
+			for i, v := range *q.Filter.Source {
+				sourceStrings[i] = string(v)
+			}
+			filters["source"] = sourceStrings
 		}
+
 		if q.Filter.ProcessStatus != nil {
-			filters["process_status"] = *q.Filter.ProcessStatus
+			statusStrings := make([]string, len(*q.Filter.ProcessStatus))
+			for i, v := range *q.Filter.ProcessStatus {
+				statusStrings[i] = string(v)
+			}
+			filters["process_status"] = statusStrings
+		} else if q.Filter.Status != nil {
+			statusStrings := make([]string, len(*q.Filter.Status))
+			for i, v := range *q.Filter.Status {
+				statusStrings[i] = string(v)
+			}
+			filters["process_status"] = statusStrings
 		}
 	}
 
@@ -203,30 +220,13 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 }
 
 func (h *Handler) ListInterviewStats(c *gin.Context) {
-	var q model.ListInterviewQuery
-	if err := c.ShouldBindJSON(&q); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	// filters
-	filters := make(map[string]interface{})
-	if q.Filter != nil {
-		if q.Filter.Source != nil {
-			filters["source"] = *q.Filter.Source
-		}
-		if q.Filter.ProcessStatus != nil {
-			filters["process_status"] = *q.Filter.ProcessStatus
-		}
-	}
-
-	stats, err := h.Repository.ListInterviewByUserStats(c.Request.Context(), claims.UserID, filters, q.Search)
+	stats, err := h.Repository.ListInterviewByUserStats(c.Request.Context(), claims.UserID)
 	if err != nil {
 		h.Logger.Sugar().Warnw("list interviews stats bad request", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

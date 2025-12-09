@@ -108,9 +108,10 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 	whereConditions := []string{"user_id = $1"}
 	args := []interface{}{userID}
 	argIndex := 2
-
+	fmt.Println(filters)
 	if len(filters) > 0 {
 		for col, val := range filters {
+			fmt.Println(col, val)
 			whereConditions = append(whereConditions, fmt.Sprintf("%s = ANY($%d)", col, argIndex))
 			args = append(args, val)
 			argIndex++
@@ -125,7 +126,7 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 	}
 
 	whereClause := strings.Join(whereConditions, " AND ")
-
+	fmt.Println(whereClause)
 	// 1. Get Total Count
 	var total int
 	countQ := fmt.Sprintf("SELECT COUNT(1) FROM interviews WHERE %s", whereClause)
@@ -165,33 +166,13 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 	return out, total, nil
 }
 
-func (r *Repository) ListInterviewByUserStats(ctx context.Context, userID uuid.UUID, filters map[string]interface{}, search *string) (*model.InterviewListStats, error) {
-	whereConditions := []string{"user_id = $1"}
-	args := []interface{}{userID}
-	argIndex := 2
+func (r *Repository) ListInterviewByUserStats(ctx context.Context, userID uuid.UUID) (*model.InterviewListStats, error) {
 
-	if len(filters) > 0 {
-		for col, val := range filters {
-			whereConditions = append(whereConditions, fmt.Sprintf("%s = ANY($%d)", col, argIndex))
-			args = append(args, val)
-			argIndex++
-		}
-	}
-
-	if search != nil && *search != "" {
-		searchPattern := "%" + *search + "%"
-		whereConditions = append(whereConditions, fmt.Sprintf("(company ILIKE $%d OR position ILIKE $%d)", argIndex, argIndex+1))
-		args = append(args, searchPattern, searchPattern)
-		argIndex += 2
-	}
-
-	whereClause := strings.Join(whereConditions, " AND ")
-
-	query := fmt.Sprintf(`
+	query := `
 		WITH base_data AS (
 			SELECT source, process_status
 			FROM interviews
-			WHERE %s
+			WHERE user_id = $1
 		),
 		source_counts AS (
 			SELECT source, COUNT(*) AS count
@@ -206,14 +187,11 @@ func (r *Repository) ListInterviewByUserStats(ctx context.Context, userID uuid.U
 		SELECT 
 			(SELECT json_agg(json_build_object('field', source, 'count', count) ORDER BY count DESC) FROM source_counts) AS source_stats,
 			(SELECT json_agg(json_build_object('field', process_status, 'count', count) ORDER BY count DESC) FROM status_counts) AS status_stats
-	`, whereClause)
-
-	// Only need args once now since we're using a single base CTE
-	allArgs := args
+	`
 
 	var sourceStatsJSON, statusStatsJSON []byte
 
-	err := r.db.QueryRow(ctx, query, allArgs...).Scan(&sourceStatsJSON, &statusStatsJSON)
+	err := r.db.QueryRow(ctx, query, userID).Scan(&sourceStatsJSON, &statusStatsJSON)
 	if err != nil {
 		return nil, fmt.Errorf("query stats: %w", err)
 	}
