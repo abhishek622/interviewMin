@@ -11,26 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func (r *Repository) CreateUser(ctx context.Context, u *model.User) error {
+func (r *Repository) CreateUser(ctx context.Context, u *model.User) (*uuid.UUID, error) {
 	const q = `
 	INSERT INTO users (name, email, password_hash)
 	VALUES ($1, $2, $3)
-	RETURNING user_id, is_admin, created_at, updated_at
+	RETURNING user_id
 	`
 
 	row := r.db.QueryRow(ctx, q, u.Name, u.Email, u.PasswordHash)
-	if err := row.Scan(&u.UserID, &u.IsAdmin, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.UserID); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			// PostgreSQL unique_violation code is "23505"
 			if pgErr.Code == "23505" {
-				return fmt.Errorf("email already exists: %w", err)
+				return nil, fmt.Errorf("email already exists: %w", err)
 			}
 		}
-		return fmt.Errorf("insert user: %w", err)
+		return nil, fmt.Errorf("insert user: %w", err)
 	}
 
-	return nil
+	return &u.UserID, nil
 }
 
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (model.User, error) {

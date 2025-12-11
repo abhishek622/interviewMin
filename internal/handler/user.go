@@ -14,7 +14,7 @@ import (
 func (h *Handler) SignUp(c *gin.Context) {
 	var req model.SignUpReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.Logger.Sugar().Warnw("signup bad request", "err", err)
+		h.Logger.Sugar().Warnw("signup bad request", "err", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -22,7 +22,7 @@ func (h *Handler) SignUp(c *gin.Context) {
 	ctx := c.Request.Context()
 	pwHash, err := pkg.HashPassword(req.Password)
 	if err != nil {
-		h.Logger.Sugar().Errorw("failed to hash password", "err", err)
+		h.Logger.Sugar().Errorw("failed to hash password", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -33,10 +33,23 @@ func (h *Handler) SignUp(c *gin.Context) {
 		PasswordHash: pwHash,
 	}
 
-	err = h.Repository.CreateUser(ctx, user)
+	userID, err := h.Repository.CreateUser(ctx, user)
 	if err != nil {
-		h.Logger.Sugar().Errorw("user create failed", "email", req.Email, "err", err)
+		h.Logger.Sugar().Errorw("user create failed", "email", req.Email, "err", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": "could not create user"})
+		return
+	}
+
+	// create unknown company
+	company := &model.Company{
+		Name:   "unknown company",
+		Slug:   "unknown-company",
+		UserID: *userID,
+	}
+	_, err = h.Repository.CreateCompany(ctx, company)
+	if err != nil {
+		h.Logger.Sugar().Errorw("failed to create unknown company", "err", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
@@ -47,19 +60,19 @@ func (h *Handler) SignUp(c *gin.Context) {
 func (h *Handler) Login(c *gin.Context) {
 	var req model.LoginReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.Logger.Sugar().Warnw("login bad request", "err", err)
+		h.Logger.Sugar().Warnw("login bad request", "err", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	ctx := c.Request.Context()
 	user, err := h.Repository.GetUserByEmail(ctx, req.Email)
 	if err != nil {
-		h.Logger.Sugar().Warnw("login user not found", "email", req.Email, "err", err)
+		h.Logger.Sugar().Warnw("login user not found", "email", req.Email, "err", err.Error())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 	if err := pkg.ComparePassword(user.PasswordHash, req.Password); err != nil {
-		h.Logger.Sugar().Warnw("login password mismatch", "email", req.Email, "err", err)
+		h.Logger.Sugar().Warnw("login password mismatch", "email", req.Email, "err", err.Error())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
@@ -67,7 +80,7 @@ func (h *Handler) Login(c *gin.Context) {
 	// Generate Refresh Token first to establish the session
 	refreshToken, refreshClaims, err := h.TokenMaker.GenerateToken(user.UserID, user.Email, user.IsAdmin, 24*time.Hour, "")
 	if err != nil {
-		h.Logger.Sugar().Errorw("error creating token", "err", err)
+		h.Logger.Sugar().Errorw("error creating token", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return
 	}
@@ -75,7 +88,7 @@ func (h *Handler) Login(c *gin.Context) {
 	// Generate Access Token linked to the session
 	accessToken, accessClaims, err := h.TokenMaker.GenerateToken(user.UserID, user.Email, user.IsAdmin, 60*time.Minute, refreshClaims.RegisteredClaims.ID)
 	if err != nil {
-		h.Logger.Sugar().Errorw("error creating token", "err", err)
+		h.Logger.Sugar().Errorw("error creating token", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return
 	}
@@ -89,7 +102,7 @@ func (h *Handler) Login(c *gin.Context) {
 		IsRevoked:    false,
 	})
 	if err != nil {
-		h.Logger.Sugar().Errorw("error creating session", "err", err)
+		h.Logger.Sugar().Errorw("error creating session", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create session"})
 		return
 	}
@@ -214,14 +227,14 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	ctx := c.Request.Context()
 	pwHash, err := pkg.HashPassword(req.NewPassword)
 	if err != nil {
-		h.Logger.Sugar().Errorw("error hashing password", "err", err)
+		h.Logger.Sugar().Errorw("error hashing password", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not change password"})
 		return
 	}
 
 	err = h.Repository.UpdateUserPassword(ctx, req.UserID, pwHash)
 	if err != nil {
-		h.Logger.Sugar().Errorw("error updating password", "err", err)
+		h.Logger.Sugar().Errorw("error updating password", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not change password"})
 		return
 	}

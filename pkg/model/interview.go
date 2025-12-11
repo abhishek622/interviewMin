@@ -27,18 +27,17 @@ const (
 
 type Interview struct {
 	InterviewID   int64                  `json:"interview_id" db:"interview_id"`
+	CompanyID     uuid.UUID              `json:"company_id" db:"company_id"`
 	UserID        uuid.UUID              `json:"user_id" db:"user_id"`
 	Source        Source                 `json:"source" db:"source"`
 	RawInput      string                 `json:"raw_input" db:"raw_input"`
 	ProcessStatus ProcessStatus          `json:"process_status" db:"process_status"`
 	ProcessError  *string                `json:"process_error" db:"process_error"`
 	Attempts      *int                   `json:"attempts" db:"attempts"`
-	Company       *string                `json:"company" db:"company"`
 	Position      *string                `json:"position" db:"position"`
 	NoOfRound     *int                   `json:"no_of_round" db:"no_of_round"`
 	Location      *string                `json:"location" db:"location"`
 	Metadata      map[string]interface{} `json:"metadata" db:"metadata"`
-	Slug          string                 `json:"slug" db:"slug"`
 	CreatedAt     time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt     time.Time              `json:"updated_at" db:"updated_at"`
 }
@@ -49,26 +48,26 @@ type CreateInterviewWithAIReq struct {
 }
 
 type CreateInterviewReq struct {
-	Source    Source  `json:"source" binding:"required"`
-	Company   string  `json:"company" binding:"required"`
-	Position  string  `json:"position" binding:"required"`
-	NoOfRound *int    `json:"no_of_round"`
-	Location  *string `json:"location"`
-	RawInput  string  `json:"raw_input" binding:"required"`
+	Source    Source     `json:"source" binding:"required"`
+	CompanyID *uuid.UUID `json:"company_id"`
+	Company   string     `json:"company" binding:"required"`
+	Position  string     `json:"position" binding:"required"`
+	NoOfRound *int       `json:"no_of_round"`
+	Location  *string    `json:"location"`
+	RawInput  string     `json:"raw_input" binding:"required"`
 }
 
 type Filter struct {
 	Source        *[]Source        `json:"source" form:"source"`
 	ProcessStatus *[]ProcessStatus `json:"process_status" form:"process_status"`
-	Status        *[]ProcessStatus `json:"status" form:"status"` // Alias for ProcessStatus
 }
 
 type ListInterviewQuery struct {
-	Page     int     `json:"page" form:"page,default=1"`
-	PageSize int     `json:"page_size" form:"page_size,default=20"`
-	Company  *string `json:"company" form:"company"`
-	Search   *string `json:"search" form:"search"`
-	Filter   *Filter `json:"filter" form:"filter"`
+	Page      int       `json:"page" form:"page,default=1"`
+	PageSize  int       `json:"page_size" form:"page_size,default=20"`
+	Search    *string   `json:"search" form:"search"`
+	CompanyID uuid.UUID `json:"company_id" form:"company_id"`
+	Filter    *Filter   `json:"filter" form:"filter"`
 }
 
 type DeleteInterviewsRequest struct {
@@ -76,12 +75,13 @@ type DeleteInterviewsRequest struct {
 }
 
 type PatchInterviewRequest struct {
-	Company        *string `json:"company,omitempty"`
-	Position       *string `json:"position,omitempty"`
-	NoOfRound      *int    `json:"no_of_round,omitempty" binding:"min=1,max=100"`
-	Location       *string `json:"location,omitempty"`
-	Title          *string `json:"title,omitempty"`
-	FullExperience *string `json:"full_experience,omitempty"`
+	CompanyID      *uuid.UUID `json:"company_id,omitempty"`
+	Company        *string    `json:"company,omitempty"`
+	Position       *string    `json:"position,omitempty"`
+	NoOfRound      *int       `json:"no_of_round,omitempty" binding:"min=1,max=100"`
+	Location       *string    `json:"location,omitempty"`
+	Title          *string    `json:"title,omitempty"`
+	FullExperience *string    `json:"full_experience,omitempty"`
 }
 
 type InterviewStats struct {
@@ -102,25 +102,13 @@ type InterviewListStats struct {
 	ProcessStatusStats []ListStats `json:"process_status"`
 }
 
-type CompanyList struct {
-	Company string `json:"company"`
-	Slug    string `json:"slug"`
-	Count   int    `json:"count"`
-}
-
-type CompanyListReq struct {
-	Limit  int `json:"limit" form:"limit,default=20"`
-	Offset int `json:"offset" form:"offset,default=0"`
-}
-
 type RecentInterviews struct {
 	InterviewID   int64         `json:"interview_id"`
 	Source        Source        `json:"source"`
 	ProcessStatus ProcessStatus `json:"process_status"`
-	Company       string        `json:"company"`
 	Position      string        `json:"position"`
 	NoOfRound     int           `json:"no_of_round"`
 	Location      string        `json:"location"`
-	Slug          string        `json:"slug"`
 	CreatedAt     time.Time     `json:"created_at"`
+	Company       *Company      `json:"company"`
 }

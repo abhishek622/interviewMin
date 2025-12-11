@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/abhishek622/interviewMin/pkg"
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
-func (r *Repository) CreateInterview(ctx context.Context, exp *model.Interview) (*int64, error) {
+func (r *Repository) CreateInterview(ctx context.Context, interview *model.Interview) (*int64, error) {
 	const q = `
 INSERT INTO interviews (
-	 user_id, source, raw_input, process_status, metadata, slug
+	 company_id, user_id, source, raw_input, process_status, metadata
 ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING interview_id
 `
 	row := r.db.QueryRow(ctx, q,
-		exp.UserID, exp.Source, exp.RawInput, exp.ProcessStatus, exp.Metadata, exp.Slug,
+		interview.CompanyID, interview.UserID, interview.Source, interview.RawInput, interview.ProcessStatus, interview.Metadata,
 	)
 	var interviewID int64
 	if err := row.Scan(&interviewID); err != nil {
@@ -27,14 +27,14 @@ INSERT INTO interviews (
 	return &interviewID, nil
 }
 
-func (r *Repository) CreateFullInterview(ctx context.Context, exp *model.Interview) (*int64, error) {
+func (r *Repository) CreateFullInterview(ctx context.Context, interview *model.Interview) (*int64, error) {
 	const q = `
 INSERT INTO interviews (
-	 user_id, source, raw_input, process_status, company, position, no_of_round, location, metadata, slug
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING interview_id
+	 company_id, user_id, source, raw_input, process_status, position, no_of_round, location, metadata
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING interview_id
 `
 	row := r.db.QueryRow(ctx, q,
-		exp.UserID, exp.Source, exp.RawInput, exp.ProcessStatus, exp.Company, exp.Position, exp.NoOfRound, exp.Location, exp.Metadata, exp.Slug,
+		interview.CompanyID, interview.UserID, interview.Source, interview.RawInput, interview.ProcessStatus, interview.Position, interview.NoOfRound, interview.Location, interview.Metadata,
 	)
 	var interviewID int64
 	if err := row.Scan(&interviewID); err != nil {
@@ -45,9 +45,9 @@ INSERT INTO interviews (
 
 func (r *Repository) UpdateInterview(ctx context.Context, interviewID int64, updates map[string]interface{}) error {
 	validCols := map[string]bool{
-		"process_status": true, "process_error": true, "company": true,
+		"process_status": true, "process_error": true,
 		"position": true, "source": true, "no_of_round": true,
-		"location": true, "metadata": true, "slug": true,
+		"location": true, "metadata": true, "company_id": true,
 	}
 
 	query := "UPDATE interviews SET "
@@ -87,15 +87,15 @@ func (r *Repository) UpdateInterview(ctx context.Context, interviewID int64, upd
 func (r *Repository) GetInterviewByID(ctx context.Context, interviewID int64) (*model.Interview, error) {
 	const q = `
 SELECT 
-	interview_id, user_id, source, raw_input, process_status, attempts,
-	process_error, company, position, no_of_round, location, metadata, slug,
-	created_at, updated_at FROM interviews WHERE interview_id = $1
+	interview_id, company_id, source, raw_input, process_status, attempts,
+	process_error, position, no_of_round, location, metadata,
+	created_at FROM interviews WHERE interview_id = $1
 `
 	var e model.Interview
 	row := r.db.QueryRow(ctx, q, interviewID)
 	err := row.Scan(
-		&e.InterviewID, &e.UserID, &e.Source, &e.RawInput, &e.ProcessStatus, &e.Attempts,
-		&e.ProcessError, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.Slug, &e.CreatedAt, &e.UpdatedAt,
+		&e.InterviewID, &e.CompanyID, &e.Source, &e.RawInput, &e.ProcessStatus, &e.Attempts,
+		&e.ProcessError, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -103,10 +103,10 @@ SELECT
 	return &e, nil
 }
 
-func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, limit, offset int, filters map[string]interface{}, search, company *string) ([]model.Interview, int, error) {
+func (r *Repository) ListInterviewByUser(ctx context.Context, companyID uuid.UUID, limit, offset int, filters map[string]interface{}, search *string) ([]model.Interview, int, error) {
 	// Base Query Construction
-	whereConditions := []string{"user_id = $1"}
-	args := []interface{}{userID}
+	whereConditions := []string{"company_id = $1"}
+	args := []interface{}{companyID}
 	argIndex := 2
 	fmt.Println(filters)
 	if len(filters) > 0 {
@@ -121,13 +121,6 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 	if search != nil && *search != "" {
 		whereConditions = append(whereConditions, fmt.Sprintf("search_tsv @@ plainto_tsquery('english', $%d)", argIndex))
 		args = append(args, *search)
-		argIndex++
-	}
-
-	if company != nil && *company != "" {
-		whereConditions = append(whereConditions, fmt.Sprintf("company = $%d", argIndex))
-		args = append(args, *company)
-		argIndex++
 	}
 
 	whereClause := strings.Join(whereConditions, " AND ")
@@ -141,9 +134,9 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 
 	// 2. Get Data
 	listQ := fmt.Sprintf(`SELECT 
-	interview_id, user_id, source, raw_input, process_status, attempts, 
-	process_error, company, position, no_of_round, location, metadata, slug,
-	created_at, updated_at FROM interviews WHERE %s
+	interview_id, company_id, source, raw_input, process_status, attempts, 
+	process_error, position, no_of_round, location, metadata, created_at
+	FROM interviews WHERE %s
 	ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIndex, argIndex+1)
 
 	listArgs := append(args, limit, offset)
@@ -158,8 +151,8 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 	for rows.Next() {
 		var e model.Interview
 		if err := rows.Scan(
-			&e.InterviewID, &e.UserID, &e.Source, &e.RawInput, &e.ProcessStatus, &e.Attempts,
-			&e.ProcessError, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.Slug, &e.CreatedAt, &e.UpdatedAt,
+			&e.InterviewID, &e.CompanyID, &e.Source, &e.RawInput, &e.ProcessStatus, &e.Attempts,
+			&e.ProcessError, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan experience row: %w", err)
 		}
@@ -255,40 +248,13 @@ func (r *Repository) ListInterviewByUserStats(ctx context.Context, userID uuid.U
 	return result, nil
 }
 
-func (r *Repository) DeleteInterview(ctx context.Context, interviewID int64) error {
-	return r.execTx(ctx, func(tx pgx.Tx) error {
-		const q2 = `DELETE FROM questions WHERE interview_id = $1`
-		_, err := tx.Exec(ctx, q2, interviewID)
-		if err != nil {
-			return fmt.Errorf("delete questions: %w", err)
-		}
-
-		const q = `DELETE FROM interviews WHERE interview_id = $1`
-		_, err = tx.Exec(ctx, q, interviewID)
-		if err != nil {
-			return fmt.Errorf("delete interview: %w", err)
-		}
-
-		return nil
-	})
-}
-
 func (r *Repository) DeleteInterviews(ctx context.Context, interviewIDs []int64) error {
-	return r.execTx(ctx, func(tx pgx.Tx) error {
-		const qQuestions = `DELETE FROM questions WHERE interview_id = ANY($1)`
-		_, err := tx.Exec(ctx, qQuestions, interviewIDs)
-		if err != nil {
-			return fmt.Errorf("delete questions: %w", err)
-		}
-
-		const qInterviews = `DELETE FROM interviews WHERE interview_id = ANY($1)`
-		_, err = tx.Exec(ctx, qInterviews, interviewIDs)
-		if err != nil {
-			return fmt.Errorf("delete interview: %w", err)
-		}
-
-		return nil
-	})
+	const qInterviews = `DELETE FROM interviews WHERE interview_id = ANY($1)`
+	_, err := r.db.Exec(ctx, qInterviews, interviewIDs)
+	if err != nil {
+		return fmt.Errorf("delete interview: %w", err)
+	}
+	return nil
 }
 
 func (r *Repository) CheckInterviewExists(ctx context.Context, interviewIDs []int64) (int, error) {
@@ -363,59 +329,15 @@ func (r *Repository) GetInterviewStats(ctx context.Context, userID uuid.UUID) (m
 	}
 
 	// Calculate Percentage Changes
-	stats.TotalChange = calculateGrowth(totalThisMonth, totalLastMonth)
-	stats.PersonalChange = calculateGrowth(personalThisMonth, personalLastMonth)
+	stats.TotalChange = pkg.CalculateGrowth(totalThisMonth, totalLastMonth)
+	stats.PersonalChange = pkg.CalculateGrowth(personalThisMonth, personalLastMonth)
 
 	return stats, nil
 }
 
-func (r *Repository) CompanyList(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.CompanyList, int, error) {
-	var total int
-	const qTotal = `SELECT COUNT(DISTINCT company) FROM interviews WHERE user_id = $1`
-	if err := r.db.QueryRow(ctx, qTotal, userID).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("query company list total: %w", err)
-	}
-
-	q := `SELECT company, slug, COUNT(*) AS count FROM interviews WHERE user_id = $1 GROUP BY company, slug ORDER BY MAX(updated_at) DESC LIMIT $2 OFFSET $3`
-	rows, err := r.db.Query(ctx, q, userID, limit, offset)
-	if err != nil {
-		return nil, 0, fmt.Errorf("query company list: %w", err)
-	}
-	defer rows.Close()
-
-	var out []model.CompanyList
-	for rows.Next() {
-		var cl model.CompanyList
-		if err := rows.Scan(&cl.Company, &cl.Slug, &cl.Count); err != nil {
-			return nil, 0, fmt.Errorf("scan company list: %w", err)
-		}
-		out = append(out, cl)
-	}
-	return out, total, nil
-}
-
-func (r *Repository) GetInterviewsByCompany(ctx context.Context, slug string) ([]int64, error) {
-	const q = `SELECT interview_id FROM interviews WHERE slug = $1`
-	rows, err := r.db.Query(ctx, q, slug)
-	if err != nil {
-		return nil, fmt.Errorf("query company list: %w", err)
-	}
-	defer rows.Close()
-
-	var out []int64
-	for rows.Next() {
-		var cl int64
-		if err := rows.Scan(&cl); err != nil {
-			return nil, fmt.Errorf("scan company list: %w", err)
-		}
-		out = append(out, cl)
-	}
-	return out, nil
-}
-
 func (r *Repository) RecentInterviews(ctx context.Context, userID uuid.UUID) ([]model.RecentInterviews, error) {
 	const q = `SELECT 
-		interview_id, source, process_status, company, position, no_of_round, location, slug,
+		interview_id, source, process_status, company, position, no_of_round, location,
 		created_at FROM interviews WHERE user_id = $1 AND created_at >= CURRENT_DATE - INTERVAL '1 months'
 	ORDER BY created_at DESC LIMIT 6`
 	rows, err := r.db.Query(ctx, q, userID)
@@ -428,25 +350,11 @@ func (r *Repository) RecentInterviews(ctx context.Context, userID uuid.UUID) ([]
 	for rows.Next() {
 		var e model.RecentInterviews
 		if err := rows.Scan(
-			&e.InterviewID, &e.Source, &e.ProcessStatus, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.Slug, &e.CreatedAt,
+			&e.InterviewID, &e.Source, &e.ProcessStatus, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan recent interview row: %w", err)
 		}
 		out = append(out, e)
 	}
 	return out, nil
-}
-
-// Helper function to calculate percentage growth safely
-func calculateGrowth(current, previous int) int {
-	if previous == 0 {
-		if current > 0 {
-			return 100 // 0 to 5 = 100% growth (technically infinite, but 100 is standard for UI)
-		}
-		return 0 // 0 to 0 = 0% change
-	}
-	// Formula: ((Current - Previous) / Previous) * 100
-	// We convert to float for division, then round back to int
-	delta := float64(current - previous)
-	return int((delta / float64(previous)) * 100)
 }

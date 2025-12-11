@@ -49,15 +49,17 @@ func (app *application) routes() http.Handler {
 		protected.POST("/interviews", app.Handler.CreateInterview)
 		protected.POST("/interviews/ai", app.Handler.CreateInterviewWithAI)
 		protected.GET("/interviews/stats", app.Handler.GetInterviewStats)
-		protected.GET("/interviews/companies", app.Handler.ListCompanies)
 		protected.GET("/interviews/recent", app.Handler.RecentInterviews)
 		protected.GET("/interviews/:id", app.Handler.GetInterview)
 		protected.POST("/interviews/list", app.Handler.ListInterviews)
 		protected.GET("/interviews/list/stats", app.Handler.ListInterviewStats)
 		protected.PATCH("/interviews/:id", app.Handler.PatchInterview)
 		protected.DELETE("/interviews", app.Handler.DeleteInterviews)
-		protected.DELETE("/interviews/companies/:slug", app.Handler.DeleteInterviewsByCompany)
-		protected.DELETE("/interviews/:id", app.Handler.DeleteInterview)
+
+		// company routes
+		protected.GET("/companies", app.Handler.ListCompanies)
+		protected.GET("/companies/:slug", app.Handler.CompanyDetails)
+		protected.DELETE("/companies/:slug", app.Handler.DeleteCompany)
 
 		// question routes
 		protected.POST("/questions", app.Handler.CreateQuestion)
