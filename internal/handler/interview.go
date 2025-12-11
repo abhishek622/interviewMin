@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/abhishek622/interviewMin/internal/fetcher"
+	"github.com/abhishek622/interviewMin/pkg"
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -89,7 +91,8 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 		// Update experience with extracted data
 		updates := map[string]interface{}{
 			"process_status": model.ProcessStatusCompleted,
-			"company":        extracted.Company,
+			"company":        strings.ToLower(extracted.Company),
+			"slug":           pkg.GenerateSlug(extracted.Company),
 			"position":       extracted.Position,
 			"no_of_round":    extracted.NoOfRound,
 			"location":       extracted.Location,
@@ -136,6 +139,8 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 		"full_experience": req.RawInput,
 	}
 
+	req.Company = strings.ToLower(req.Company)
+
 	createObj := model.Interview{
 		UserID:        claims.UserID,
 		Source:        req.Source,
@@ -143,6 +148,7 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 		ProcessStatus: model.ProcessStatusCompleted,
 		Metadata:      metadata,
 		Company:       &req.Company,
+		Slug:          pkg.GenerateSlug(req.Company),
 		Position:      &req.Position,
 		NoOfRound:     req.NoOfRound,
 		Location:      req.Location,
@@ -204,7 +210,7 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 		}
 	}
 
-	exps, total, err := h.Repository.ListInterviewByUser(c.Request.Context(), claims.UserID, limit, offset, filters, q.Search)
+	exps, total, err := h.Repository.ListInterviewByUser(c.Request.Context(), claims.UserID, limit, offset, filters, q.Search, q.Company)
 	if err != nil {
 		h.Logger.Sugar().Warnw("list interviews bad request", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -312,7 +318,8 @@ func (h *Handler) PatchInterview(c *gin.Context) {
 		updates["metadata"] = metadata
 	}
 	if req.Company != nil {
-		updates["company"] = req.Company
+		updates["company"] = strings.ToLower(*req.Company)
+		updates["slug"] = pkg.GenerateSlug(*req.Company)
 	}
 	if req.Position != nil {
 		updates["position"] = req.Position
@@ -332,7 +339,6 @@ func (h *Handler) PatchInterview(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "interview updated successfully"})
 }
 
-// delete a interview exprience
 func (h *Handler) DeleteInterview(c *gin.Context) {
 	idStr := c.Param("interview_id")
 	if idStr == "" {
@@ -360,7 +366,6 @@ func (h *Handler) DeleteInterview(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "interview deleted successfully"})
 }
 
-// delete multiple interview expriences
 func (h *Handler) DeleteInterviews(c *gin.Context) {
 	var req model.DeleteInterviewsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -401,4 +406,68 @@ func (h *Handler) GetInterviewStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "interview stats fetched successfully", "stats": stats})
+}
+
+func (h *Handler) ListCompanies(c *gin.Context) {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	q := model.CompanyListReq{}
+	if err := c.ShouldBindQuery(&q); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	companies, total, err := h.Repository.CompanyList(c.Request.Context(), claims.UserID, q.Limit, q.Offset)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "company list not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "company list fetched successfully", "companies": companies, "total": total})
+}
+
+func (h *Handler) DeleteInterviewsByCompany(c *gin.Context) {
+	slug := c.Param("slug")
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing company name"})
+		return
+	}
+
+	interviews, err := h.Repository.GetInterviewsByCompany(c.Request.Context(), slug)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "interviews not found"})
+		return
+	}
+
+	if len(interviews) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "interviews not found for company"})
+		return
+	}
+
+	if err := h.Repository.DeleteInterviews(c.Request.Context(), interviews); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "interviews deleted successfully for company"})
+}
+
+func (h *Handler) RecentInterviews(c *gin.Context) {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	interviews, err := h.Repository.RecentInterviews(c.Request.Context(), claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "interviews not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "interviews fetched successfully", "interviews": interviews})
 }

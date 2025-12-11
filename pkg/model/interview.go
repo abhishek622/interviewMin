@@ -38,6 +38,7 @@ type Interview struct {
 	NoOfRound     *int                   `json:"no_of_round" db:"no_of_round"`
 	Location      *string                `json:"location" db:"location"`
 	Metadata      map[string]interface{} `json:"metadata" db:"metadata"`
+	Slug          string                 `json:"slug" db:"slug"`
 	CreatedAt     time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt     time.Time              `json:"updated_at" db:"updated_at"`
 }
@@ -65,6 +66,7 @@ type Filter struct {
 type ListInterviewQuery struct {
 	Page     int     `json:"page" form:"page,default=1"`
 	PageSize int     `json:"page_size" form:"page_size,default=20"`
+	Company  *string `json:"company" form:"company"`
 	Search   *string `json:"search" form:"search"`
 	Filter   *Filter `json:"filter" form:"filter"`
 }
@@ -98,4 +100,27 @@ type ListStats struct {
 type InterviewListStats struct {
 	SourceStats        []ListStats `json:"source"`
 	ProcessStatusStats []ListStats `json:"process_status"`
+}
+
+type CompanyList struct {
+	Company string `json:"company"`
+	Slug    string `json:"slug"`
+	Count   int    `json:"count"`
+}
+
+type CompanyListReq struct {
+	Limit  int `json:"limit" form:"limit,default=20"`
+	Offset int `json:"offset" form:"offset,default=0"`
+}
+
+type RecentInterviews struct {
+	InterviewID   int64         `json:"interview_id"`
+	Source        Source        `json:"source"`
+	ProcessStatus ProcessStatus `json:"process_status"`
+	Company       string        `json:"company"`
+	Position      string        `json:"position"`
+	NoOfRound     int           `json:"no_of_round"`
+	Location      string        `json:"location"`
+	Slug          string        `json:"slug"`
+	CreatedAt     time.Time     `json:"created_at"`
 }
