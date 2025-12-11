@@ -11,7 +11,6 @@ func (app *application) routes() http.Handler {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	// simple logger middleware that uses zap
 	r.Use(func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
@@ -23,7 +22,7 @@ func (app *application) routes() http.Handler {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -35,7 +34,6 @@ func (app *application) routes() http.Handler {
 
 	v1 := r.Group("/api/v1")
 	{
-		v1.POST("/signup", app.Handler.SignUp)
 		v1.POST("/login", app.Handler.Login)
 		v1.POST("/tokens/renew", app.Handler.RenewAccessToken)
 	}
@@ -63,6 +61,13 @@ func (app *application) routes() http.Handler {
 		protected.GET("/questions/:interview_id", app.Handler.ListQuestions)
 		protected.PUT("/questions/:q_id", app.Handler.UpdateQuestion)
 		protected.DELETE("/questions/:q_id", app.Handler.DeleteQuestion)
+	}
+
+	admin := v1.Group("/")
+	admin.Use(app.AdminMiddleware())
+	{
+		admin.POST("/signup", app.Handler.SignUp)
+		admin.POST("/change-password", app.Handler.ChangePassword)
 	}
 
 	return r

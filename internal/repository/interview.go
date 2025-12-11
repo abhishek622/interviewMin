@@ -119,10 +119,9 @@ func (r *Repository) ListInterviewByUser(ctx context.Context, userID uuid.UUID, 
 	}
 
 	if search != nil && *search != "" {
-		searchPattern := "%" + *search + "%"
-		whereConditions = append(whereConditions, fmt.Sprintf("(company ILIKE $%d OR position ILIKE $%d)", argIndex, argIndex+1))
-		args = append(args, searchPattern, searchPattern)
-		argIndex += 2
+		whereConditions = append(whereConditions, fmt.Sprintf("search_tsv @@ plainto_tsquery('english', $%d)", argIndex))
+		args = append(args, *search)
+		argIndex++
 	}
 
 	whereClause := strings.Join(whereConditions, " AND ")

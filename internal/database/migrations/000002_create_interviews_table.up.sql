@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS interviews (
     -- user-provided input
     source      VARCHAR(50) NOT NULL,   
     raw_input       TEXT NOT NULL,                  -- original input
-    input_hash      TEXT NOT NULL,                  -- sha256(raw_input)
 
     -- async processing
     process_status  VARCHAR(20) NOT NULL DEFAULT 'queued', -- queued | processing | completed | failed
@@ -33,7 +32,6 @@ CREATE TABLE IF NOT EXISTS interviews (
 CREATE INDEX IF NOT EXISTS idx_interviews_user ON interviews(user_id);
 CREATE INDEX IF NOT EXISTS idx_interviews_company ON interviews(company);
 CREATE INDEX IF NOT EXISTS idx_interviews_position ON interviews(position);
-CREATE INDEX IF NOT EXISTS idx_interviews_input_hash ON interviews(input_hash);
 
 -- trigger function to populate search_tsv from relevant columns
 CREATE OR REPLACE FUNCTION interviews_tsv_trigger() RETURNS trigger AS $$

@@ -104,3 +104,12 @@ func (r *Repository) DeleteUserSession(ctx context.Context, userTokenId string) 
 	}
 	return nil
 }
+
+func (r *Repository) UpdateUserPassword(ctx context.Context, userID uuid.UUID, newPasswordHash string) error {
+	const q = `UPDATE users SET password_hash = $2 WHERE user_id = $1`
+	_, err := r.db.Exec(ctx, q, userID, newPasswordHash)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	return nil
+}

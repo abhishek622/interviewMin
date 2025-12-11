@@ -7,7 +7,7 @@ import (
 )
 
 type User struct {
-	UserID       uuid.UUID    `json:"user_id" db:"user_id"`
+	UserID       uuid.UUID `json:"user_id" db:"user_id"`
 	Name         string    `json:"name" db:"name"`
 	Email        string    `json:"email" db:"email"`
 	PasswordHash string    `json:"-" db:"password_hash"`
@@ -24,14 +24,14 @@ type SignUpReq struct {
 
 type UserRes struct {
 	UserID  uuid.UUID `json:"user_id"`
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	IsAdmin bool   `json:"is_admin"`
+	Email   string    `json:"email"`
+	Name    string    `json:"name"`
+	IsAdmin bool      `json:"is_admin"`
 }
 
 type UserToken struct {
 	UserTokenID  string    `json:"user_token_id" db:"user_token_id"`
-	UserID       uuid.UUID    `json:"user_id" db:"user_id"`
+	UserID       uuid.UUID `json:"user_id" db:"user_id"`
 	RefreshToken string    `json:"refresh_token" db:"refresh_token"`
 	ExpiresAt    time.Time `json:"expires_at" db:"expires_at"`
 	DeviceInfo   string    `json:"device_info" db:"device_info"`
@@ -60,4 +60,9 @@ type RenewAccessTokenReq struct {
 type RenewAccessTokenRes struct {
 	AccessToken          string    `json:"access_token"`
 	AccessTokenExpiresAt time.Time `json:"access_token_expires_at"`
+}
+
+type ChangePasswordReq struct {
+	UserID      uuid.UUID `json:"user_id" binding:"required"`
+	NewPassword string    `json:"new_password" binding:"required,min=6"`
 }

@@ -40,7 +40,7 @@ func (app *application) AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-func (app *application) AdminAuthMiddleware() gin.HandlerFunc {
+func (app *application) AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, err := verifyClaimsFromAuthHeader(c, app.Handler.TokenMaker)
 		if err != nil {

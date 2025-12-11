@@ -36,7 +36,6 @@ func (h *Handler) SignUp(c *gin.Context) {
 	err = h.Repository.CreateUser(ctx, user)
 	if err != nil {
 		h.Logger.Sugar().Errorw("user create failed", "email", req.Email, "err", err)
-		// hide DB errors from clients; assume duplicate email will be surfaced by repo
 		c.JSON(http.StatusBadRequest, gin.H{"error": "could not create user"})
 		return
 	}
@@ -65,7 +64,6 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	// create a json web token (JWT) and return it as response
 	// Generate Refresh Token first to establish the session
 	refreshToken, refreshClaims, err := h.TokenMaker.GenerateToken(user.UserID, user.Email, user.IsAdmin, 24*time.Hour, "")
 	if err != nil {
@@ -108,7 +106,6 @@ func (h *Handler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
-// Me returns the current user profile
 func (h *Handler) Me(c *gin.Context) {
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
@@ -205,4 +202,29 @@ func (h *Handler) RevokeSession(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "session revoked successfully"})
+}
+
+func (h *Handler) ChangePassword(c *gin.Context) {
+	var req model.ChangePasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	pwHash, err := pkg.HashPassword(req.NewPassword)
+	if err != nil {
+		h.Logger.Sugar().Errorw("error hashing password", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not change password"})
+		return
+	}
+
+	err = h.Repository.UpdateUserPassword(ctx, req.UserID, pwHash)
+	if err != nil {
+		h.Logger.Sugar().Errorw("error updating password", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not change password"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "password changed successfully"})
 }

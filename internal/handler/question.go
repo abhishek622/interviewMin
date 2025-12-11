@@ -53,7 +53,16 @@ func (h *Handler) ListQuestions(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "questions fetched successfully", "questions": questions})
+	// formatted response, group by type
+	groupedQuestions := make(map[string][]model.Question)
+	for _, question := range questions {
+		if _, ok := groupedQuestions[question.Type]; !ok {
+			groupedQuestions[question.Type] = []model.Question{}
+		}
+		groupedQuestions[question.Type] = append(groupedQuestions[question.Type], question)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "questions fetched successfully", "questions": groupedQuestions})
 }
 
 func (h *Handler) UpdateQuestion(c *gin.Context) {
