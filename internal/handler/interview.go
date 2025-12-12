@@ -220,6 +220,10 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 func (h *Handler) ListInterviews(c *gin.Context) {
 	var q model.ListInterviewQuery
 	if err := c.ShouldBindJSON(&q); err != nil {
+		if strings.Contains(err.Error(), "CompanyID") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "company_id is required"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -257,7 +261,7 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 		}
 	}
 
-	exps, total, err := h.Repository.ListInterviewByUser(c.Request.Context(), q.CompanyID, limit, offset, filters, q.Search)
+	exps, total, err := h.Repository.ListInterviewByCompany(c.Request.Context(), q.CompanyID, limit, offset, filters, q.Search)
 	if err != nil {
 		h.Logger.Sugar().Warnw("list interviews bad request", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -442,7 +446,8 @@ func (h *Handler) GetInterviewStats(c *gin.Context) {
 
 	stats, err := h.Repository.GetInterviewStats(c.Request.Context(), claims.UserID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
+		h.Logger.Sugar().Errorw("failed to get interview stats", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 

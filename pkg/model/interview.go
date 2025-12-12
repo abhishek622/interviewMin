@@ -66,7 +66,7 @@ type ListInterviewQuery struct {
 	Page      int       `json:"page" form:"page,default=1"`
 	PageSize  int       `json:"page_size" form:"page_size,default=20"`
 	Search    *string   `json:"search" form:"search"`
-	CompanyID uuid.UUID `json:"company_id" form:"company_id"`
+	CompanyID uuid.UUID `json:"company_id" form:"company_id" binding:"required"`
 	Filter    *Filter   `json:"filter" form:"filter"`
 }
 
@@ -110,5 +110,21 @@ type RecentInterviews struct {
 	NoOfRound     int           `json:"no_of_round"`
 	Location      string        `json:"location"`
 	CreatedAt     time.Time     `json:"created_at"`
-	Company       *Company      `json:"company"`
+	CompanyID     uuid.UUID     `json:"company_id"`
+	CompanyName   string        `json:"company_name"`
+}
+
+type InterviewRes struct {
+	InterviewID   int64                  `json:"interview_id"`
+	CompanyID     uuid.UUID              `json:"company_id"`
+	UserID        uuid.UUID              `json:"user_id"`
+	Source        Source                 `json:"source"`
+	RawInput      string                 `json:"raw_input"`
+	ProcessStatus ProcessStatus          `json:"process_status"`
+	ProcessError  *string                `json:"process_error"`
+	Position      string                 `json:"position"`
+	NoOfRound     int                    `json:"no_of_round"`
+	Location      string                 `json:"location"`
+	CreatedAt     time.Time              `json:"created_at"`
+	Metadata      map[string]interface{} `json:"metadata"`
 }

@@ -84,17 +84,17 @@ func (r *Repository) UpdateInterview(ctx context.Context, interviewID int64, upd
 	return nil
 }
 
-func (r *Repository) GetInterviewByID(ctx context.Context, interviewID int64) (*model.Interview, error) {
+func (r *Repository) GetInterviewByID(ctx context.Context, interviewID int64) (*model.InterviewRes, error) {
 	const q = `
 SELECT 
-	interview_id, company_id, source, raw_input, process_status, attempts,
+	interview_id, user_id, company_id, source, raw_input, process_status,
 	process_error, position, no_of_round, location, metadata,
 	created_at FROM interviews WHERE interview_id = $1
 `
-	var e model.Interview
+	var e model.InterviewRes
 	row := r.db.QueryRow(ctx, q, interviewID)
 	err := row.Scan(
-		&e.InterviewID, &e.CompanyID, &e.Source, &e.RawInput, &e.ProcessStatus, &e.Attempts,
+		&e.InterviewID, &e.UserID, &e.CompanyID, &e.Source, &e.RawInput, &e.ProcessStatus,
 		&e.ProcessError, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt,
 	)
 	if err != nil {
@@ -103,7 +103,7 @@ SELECT
 	return &e, nil
 }
 
-func (r *Repository) ListInterviewByUser(ctx context.Context, companyID uuid.UUID, limit, offset int, filters map[string]interface{}, search *string) ([]model.Interview, int, error) {
+func (r *Repository) ListInterviewByCompany(ctx context.Context, companyID uuid.UUID, limit, offset int, filters map[string]interface{}, search *string) ([]model.Interview, int, error) {
 	// Base Query Construction
 	whereConditions := []string{"company_id = $1"}
 	args := []interface{}{companyID}
@@ -284,15 +284,15 @@ func (r *Repository) GetInterviewStats(ctx context.Context, userID uuid.UUID) (m
 
         -- 3. Top Companies
         COALESCE((
-            SELECT array_agg(t.company)
+            SELECT array_agg(t.name)
             FROM (
-                SELECT company
-                FROM interviews
-                WHERE user_id = $1 
-                  AND company IS NOT NULL 
-                  AND company != ''
-                  AND created_at >= CURRENT_DATE - INTERVAL '6 months'
-                GROUP BY company
+                SELECT c.name
+                FROM interviews i
+                JOIN companies c ON i.company_id = c.company_id
+                WHERE i.user_id = $1 
+				  AND c.name != 'unknown company'
+                  AND i.created_at >= CURRENT_DATE - INTERVAL '6 months'
+                GROUP BY c.name
                 ORDER BY COUNT(*) DESC
                 LIMIT 5
             ) t
@@ -337,9 +337,11 @@ func (r *Repository) GetInterviewStats(ctx context.Context, userID uuid.UUID) (m
 
 func (r *Repository) RecentInterviews(ctx context.Context, userID uuid.UUID) ([]model.RecentInterviews, error) {
 	const q = `SELECT 
-		interview_id, source, process_status, company, position, no_of_round, location,
-		created_at FROM interviews WHERE user_id = $1 AND created_at >= CURRENT_DATE - INTERVAL '1 months'
-	ORDER BY created_at DESC LIMIT 6`
+		i.interview_id, i.source, i.process_status, i.company_id, c.name AS company_name, i.position, i.no_of_round, i.location, i.created_at
+		FROM interviews i
+		INNER JOIN companies c ON i.company_id = c.company_id 
+		WHERE i.user_id = $1 AND i.created_at >= CURRENT_DATE - INTERVAL '1 months'
+	ORDER BY i.created_at DESC LIMIT 6`
 	rows, err := r.db.Query(ctx, q, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query recent interviews: %w", err)
@@ -350,7 +352,7 @@ func (r *Repository) RecentInterviews(ctx context.Context, userID uuid.UUID) ([]
 	for rows.Next() {
 		var e model.RecentInterviews
 		if err := rows.Scan(
-			&e.InterviewID, &e.Source, &e.ProcessStatus, &e.Company, &e.Position, &e.NoOfRound, &e.Location, &e.CreatedAt,
+			&e.InterviewID, &e.Source, &e.ProcessStatus, &e.CompanyID, &e.CompanyName, &e.Position, &e.NoOfRound, &e.Location, &e.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan recent interview row: %w", err)
 		}
