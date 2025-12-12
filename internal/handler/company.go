@@ -86,3 +86,27 @@ func (h *Handler) GetCompany(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, company)
 }
+
+func (h *Handler) ListCompaniesNameList(c *gin.Context) {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	q := model.CompanyListReq{}
+	if err := c.ShouldBindQuery(&q); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	companies, total, err := h.Repository.CompanyListNameList(c.Request.Context(), claims.UserID, q.Limit, q.Offset, q.Sort)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "company list not found"})
+		return
+	}
+
+	hasNext := total > q.Limit*(q.Offset+1)
+
+	c.JSON(http.StatusOK, gin.H{"message": "company list fetched successfully", "companies": companies, "has_next": hasNext})
+}

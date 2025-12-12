@@ -120,3 +120,28 @@ GROUP BY c.company_id;
 	}
 	return &company, nil
 }
+
+func (r *Repository) CompanyListNameList(ctx context.Context, userID uuid.UUID, limit, offset int, sort string) ([]model.CompanyListNameList, int, error) {
+	var total int
+	const qTotal = `SELECT COUNT(*) FROM companies WHERE user_id = $1`
+	if err := r.db.QueryRow(ctx, qTotal, userID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("query company list total: %w", err)
+	}
+
+	q := `SELECT company_id, name FROM companies WHERE user_id = $1 LIMIT $2 OFFSET $3`
+	rows, err := r.db.Query(ctx, q, userID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query company list: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.CompanyListNameList
+	for rows.Next() {
+		var cl model.CompanyListNameList
+		if err := rows.Scan(&cl.CompanyID, &cl.Name); err != nil {
+			return nil, 0, fmt.Errorf("scan company list: %w", err)
+		}
+		out = append(out, cl)
+	}
+	return out, total, nil
+}

@@ -106,9 +106,9 @@ type RecentInterviews struct {
 	InterviewID   int64         `json:"interview_id"`
 	Source        Source        `json:"source"`
 	ProcessStatus ProcessStatus `json:"process_status"`
-	Position      string        `json:"position"`
-	NoOfRound     int           `json:"no_of_round"`
-	Location      string        `json:"location"`
+	Position      *string       `json:"position"`
+	NoOfRound     *int          `json:"no_of_round"`
+	Location      *string       `json:"location"`
 	CreatedAt     time.Time     `json:"created_at"`
 	CompanyID     uuid.UUID     `json:"company_id"`
 	CompanyName   string        `json:"company_name"`
@@ -122,9 +122,9 @@ type InterviewRes struct {
 	RawInput      string                 `json:"raw_input"`
 	ProcessStatus ProcessStatus          `json:"process_status"`
 	ProcessError  *string                `json:"process_error"`
-	Position      string                 `json:"position"`
-	NoOfRound     int                    `json:"no_of_round"`
-	Location      string                 `json:"location"`
+	Position      *string                `json:"position"`
+	NoOfRound     *int                   `json:"no_of_round"`
+	Location      *string                `json:"location"`
 	CreatedAt     time.Time              `json:"created_at"`
 	Metadata      map[string]interface{} `json:"metadata"`
 	CompanyName   *string                `json:"company_name"`

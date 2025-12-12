@@ -35,3 +35,8 @@ type CompanyDetails struct {
 	TotalInterviews int       `json:"total_interviews"`
 	AvgRounds       float64   `json:"avg_rounds"`
 }
+
+type CompanyListNameList struct {
+	CompanyID uuid.UUID `json:"company_id"`
+	Name      string    `json:"name"`
+}

@@ -49,33 +49,26 @@ func GetGfGPost(pageURL, userAgent string) (GfGPostResponse, error) {
 		}
 	})
 
-	// If not found, try alternative selectors
 	if lastUpdated == "" {
 		dateText := doc.Find(".date, .updated, .post-date").First().Text()
 		lastUpdated = strings.TrimSpace(dateText)
 	}
 
-	// Extract main content from article body
-	var contentParts []string
-
-	// Target the main article content area
+	// Extract main content
+	var contentBuilder strings.Builder
 	articleContent := doc.Find("div.article--viewer_content, div.entry-content, article .content").First()
 
 	if articleContent.Length() > 0 {
-		// Remove unwanted elements before extracting text
+		// Remove unwanted elements
 		articleContent.Find("script, style, nav, header, footer, .ad, .advertisement").Remove()
 
-		// Extract paragraphs and headings
-		articleContent.Find("p, h2, h3, h4, ul, ol, pre").Each(func(i int, s *goquery.Selection) {
-			text := cleanText(s.Text())
-			if text != "" {
-				contentParts = append(contentParts, text)
-			}
+		// Process each content element
+		articleContent.Find("h1, h2, h3, h4, h5, h6, p, ul, ol, pre, a").Each(func(i int, s *goquery.Selection) {
+			processElement(s, &contentBuilder)
 		})
 	}
 
-	content := strings.Join(contentParts, "\n\n")
-	content = cleanFinalContent(content)
+	content := cleanFinalContent(contentBuilder.String())
 
 	return GfGPostResponse{
 		Title:       title,
@@ -85,26 +78,99 @@ func GetGfGPost(pageURL, userAgent string) (GfGPostResponse, error) {
 	}, nil
 }
 
-// cleanText removes excessive whitespace and newlines
-func cleanText(text string) string {
-	// Replace multiple spaces with single space
-	re := regexp.MustCompile(`[ \t]+`)
-	text = re.ReplaceAllString(text, " ")
+// processElement handles different HTML elements and formats them appropriately
+func processElement(s *goquery.Selection, builder *strings.Builder) {
+	nodeName := goquery.NodeName(s)
 
-	// Replace multiple newlines with single newline
-	re = regexp.MustCompile(`\n+`)
-	text = re.ReplaceAllString(text, "\n")
+	switch nodeName {
+	case "h1", "h2", "h3", "h4", "h5", "h6":
+		text := cleanInlineText(s.Text())
+		if text != "" {
+			if builder.Len() > 0 {
+				builder.WriteString("\n\n")
+			}
+			builder.WriteString(text)
+			builder.WriteString("\n")
+		}
 
-	// Trim whitespace from each line
-	lines := strings.Split(text, "\n")
-	var cleanedLines []string
-	for _, line := range lines {
-		if trimmed := strings.TrimSpace(line); trimmed != "" {
-			cleanedLines = append(cleanedLines, trimmed)
+	case "p":
+		text := processInlineElements(s)
+		if text != "" {
+			if builder.Len() > 0 {
+				builder.WriteString("\n\n")
+			}
+			builder.WriteString(text)
+		}
+
+	case "ul", "ol":
+		if builder.Len() > 0 && !strings.HasSuffix(builder.String(), "\n") {
+			builder.WriteString("\n")
+		}
+		s.Find("li").Each(func(i int, li *goquery.Selection) {
+			text := processInlineElements(li)
+			if text != "" {
+				builder.WriteString(" - ")
+				builder.WriteString(text)
+				builder.WriteString("\n")
+			}
+		})
+
+	case "pre":
+		code := s.Find("code").Text()
+		if code == "" {
+			code = s.Text()
+		}
+		code = strings.TrimSpace(code)
+		if code != "" {
+			if builder.Len() > 0 {
+				builder.WriteString("\n\n")
+			}
+			builder.WriteString("```\n")
+			builder.WriteString(code)
+			builder.WriteString("\n```")
 		}
 	}
+}
 
-	return strings.Join(cleanedLines, "\n")
+// processInlineElements handles text content with inline elements like links
+func processInlineElements(s *goquery.Selection) string {
+	var result strings.Builder
+
+	s.Contents().Each(func(i int, node *goquery.Selection) {
+		if goquery.NodeName(node) == "a" {
+			linkText := cleanInlineText(node.Text())
+			href, exists := node.Attr("href")
+			if linkText != "" && exists && href != "" {
+				result.WriteString(`"`)
+				result.WriteString(linkText)
+				result.WriteString(`"[`)
+				result.WriteString(href)
+				result.WriteString(`]`)
+			} else if linkText != "" {
+				result.WriteString(linkText)
+			}
+		} else {
+			text := node.Text()
+			if text != "" {
+				result.WriteString(cleanInlineText(text))
+			}
+		}
+	})
+
+	return strings.TrimSpace(result.String())
+}
+
+// cleanInlineText cleans text while preserving single spaces
+func cleanInlineText(text string) string {
+	// Replace tabs and multiple spaces with single space
+	re := regexp.MustCompile(`[\t ]+`)
+	text = re.ReplaceAllString(text, " ")
+
+	// Replace multiple newlines with single space
+	re = regexp.MustCompile(`\n+`)
+	text = re.ReplaceAllString(text, " ")
+
+	return strings.TrimSpace(text)
 }
 
 // cleanFinalContent performs final cleanup on the entire content
@@ -113,7 +179,14 @@ func cleanFinalContent(content string) string {
 	re := regexp.MustCompile(`\n{3,}`)
 	content = re.ReplaceAllString(content, "\n\n")
 
-	return strings.TrimSpace(content)
+	// Remove trailing spaces from each line
+	lines := strings.Split(content, "\n")
+	var cleanedLines []string
+	for _, line := range lines {
+		cleanedLines = append(cleanedLines, strings.TrimRight(line, " \t"))
+	}
+
+	return strings.TrimSpace(strings.Join(cleanedLines, "\n"))
 }
 
 func ParseGeeksforgeeksURL(raw string) (cleanURL string, err error) {
@@ -134,8 +207,6 @@ func ParseGeeksforgeeksURL(raw string) (cleanURL string, err error) {
 	}
 
 	// Validate path format
-	// e.g - /interview-experiences/infosys-interview-experience-for-systems-engineer-trainee/
-	// Pattern: /interview-experiences/{topic-name}/
 	re := regexp.MustCompile(`^/interview-experiences/([\w-]+)/?$`)
 	m := re.FindStringSubmatch(u.Path)
 	if len(m) < 2 {

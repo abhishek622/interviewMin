@@ -32,6 +32,11 @@ func (app *application) routes() http.Handler {
 		c.Next()
 	})
 
+	// healthcheck
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
 	v1 := r.Group("/api/v1")
 	v1.Use(app.RateLimitMiddleware())
 	{
@@ -61,6 +66,7 @@ func (app *application) routes() http.Handler {
 
 		// company routes
 		protected.GET("/companies", app.Handler.ListCompanies)
+		protected.GET("/companies/list/names", app.Handler.ListCompaniesNameList)
 		protected.GET("/companies/:identifier", app.Handler.GetCompany)
 		protected.DELETE("/companies/:company_id", app.Handler.DeleteCompany)
 
