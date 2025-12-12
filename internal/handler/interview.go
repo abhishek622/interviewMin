@@ -261,7 +261,7 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 		}
 	}
 
-	exps, total, err := h.Repository.ListInterviewByCompany(c.Request.Context(), q.CompanyID, limit, offset, filters, q.Search)
+	data, total, err := h.Repository.ListInterviewByCompany(c.Request.Context(), q.CompanyID, limit, offset, filters, q.Search)
 	if err != nil {
 		h.Logger.Sugar().Warnw("list interviews bad request", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -269,7 +269,7 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":      exps,
+		"data":      data,
 		"total":     total,
 		"page":      q.Page,
 		"page_size": limit,
@@ -290,9 +290,7 @@ func (h *Handler) ListInterviewStats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": stats,
-	})
+	c.JSON(http.StatusOK, stats)
 }
 
 func (h *Handler) GetInterview(c *gin.Context) {
@@ -308,6 +306,12 @@ func (h *Handler) GetInterview(c *gin.Context) {
 		return
 	}
 
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	interview, err := h.Repository.GetInterviewByID(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -318,6 +322,15 @@ func (h *Handler) GetInterview(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
+
+	company, err := h.Repository.CompanyDetails(c.Request.Context(), claims.UserID, interview.CompanyID)
+	if err != nil {
+		h.Logger.Sugar().Errorw("failed to get company", "id", interview.CompanyID, "err", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	interview.CompanyName = &company.Name
 
 	// Fetch questions
 	qs, err := h.Repository.ListQuestionByInterviewID(c.Request.Context(), id)
@@ -463,6 +476,10 @@ func (h *Handler) RecentInterviews(c *gin.Context) {
 
 	interviews, err := h.Repository.RecentInterviews(c.Request.Context(), claims.UserID)
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	if len(interviews) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "interviews not found"})
 		return
 	}

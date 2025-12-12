@@ -8,34 +8,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func (h *Handler) CompanyDetails(c *gin.Context) {
-	claims := h.GetClaimsFromContext(c)
-	if claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	companyId := c.Param("company_id")
-	if companyId == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing company ID"})
-		return
-	}
-
-	uid, err := uuid.Parse(companyId)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid company ID"})
-		return
-	}
-
-	company, err := h.Repository.CompanyDetails(c.Request.Context(), claims.UserID, uid)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "company not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "company fetched successfully", "company": company})
-}
-
 func (h *Handler) ListCompanies(c *gin.Context) {
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
@@ -49,13 +21,15 @@ func (h *Handler) ListCompanies(c *gin.Context) {
 		return
 	}
 
-	companies, total, err := h.Repository.CompanyList(c.Request.Context(), claims.UserID, q.Limit, q.Offset)
+	companies, total, err := h.Repository.CompanyList(c.Request.Context(), claims.UserID, q.Limit, q.Offset, q.Sort)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "company list not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "company list fetched successfully", "companies": companies, "total": total})
+	hasNext := total > q.Limit*(q.Offset+1)
+
+	c.JSON(http.StatusOK, gin.H{"message": "company list fetched successfully", "companies": companies, "has_next": hasNext})
 }
 
 func (h *Handler) DeleteCompany(c *gin.Context) {
@@ -77,4 +51,38 @@ func (h *Handler) DeleteCompany(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "company deleted successfully"})
+}
+
+func (h *Handler) GetCompany(c *gin.Context) {
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	identifier := c.Param("identifier")
+	if identifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing identifier"})
+		return
+	}
+
+	// Check if identifier is UUID
+	if id, err := uuid.Parse(identifier); err == nil {
+		// It is a UUID, fetch details by ID
+		company, err := h.Repository.CompanyDetails(c.Request.Context(), claims.UserID, id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "company not found"})
+			return
+		}
+		c.JSON(http.StatusOK, company)
+		return
+	}
+
+	// It is a slug (or invalid UUID), fetch by Slug
+	company, err := h.Repository.GetCompanyBySlug(c.Request.Context(), claims.UserID, identifier)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "company not found"})
+		return
+	}
+	c.JSON(http.StatusOK, company)
 }

@@ -103,16 +103,16 @@ SELECT
 	return &e, nil
 }
 
-func (r *Repository) ListInterviewByCompany(ctx context.Context, companyID uuid.UUID, limit, offset int, filters map[string]interface{}, search *string) ([]model.Interview, int, error) {
+func (r *Repository) ListInterviewByCompany(ctx context.Context, companyID uuid.UUID, limit, offset int, filters map[string]interface{}, search *string) ([]model.InterviewListItem, int, error) {
 	// Base Query Construction
-	whereConditions := []string{"company_id = $1"}
+	whereConditions := []string{"i.company_id = $1"}
 	args := []interface{}{companyID}
 	argIndex := 2
 	fmt.Println(filters)
 	if len(filters) > 0 {
 		for col, val := range filters {
 			fmt.Println(col, val)
-			whereConditions = append(whereConditions, fmt.Sprintf("%s = ANY($%d)", col, argIndex))
+			whereConditions = append(whereConditions, fmt.Sprintf("i.%s = ANY($%d)", col, argIndex))
 			args = append(args, val)
 			argIndex++
 		}
@@ -127,17 +127,17 @@ func (r *Repository) ListInterviewByCompany(ctx context.Context, companyID uuid.
 	fmt.Println(whereClause)
 	// 1. Get Total Count
 	var total int
-	countQ := fmt.Sprintf("SELECT COUNT(1) FROM interviews WHERE %s", whereClause)
+	countQ := fmt.Sprintf("SELECT COUNT(1) FROM interviews i WHERE %s", whereClause)
 	if err := r.db.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count interview: %w", err)
 	}
 
 	// 2. Get Data
 	listQ := fmt.Sprintf(`SELECT 
-	interview_id, company_id, source, raw_input, process_status, attempts, 
-	process_error, position, no_of_round, location, metadata, created_at
-	FROM interviews WHERE %s
-	ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIndex, argIndex+1)
+	i.interview_id, i.company_id, i.source, i.raw_input, i.process_status, 
+	i.process_error, i.position, i.no_of_round, i.location, i.metadata, i.created_at, c.name as company_name
+	FROM interviews i INNER JOIN companies c ON i.company_id = c.company_id 
+	WHERE %s ORDER BY i.created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIndex, argIndex+1)
 
 	listArgs := append(args, limit, offset)
 
@@ -147,12 +147,12 @@ func (r *Repository) ListInterviewByCompany(ctx context.Context, companyID uuid.
 	}
 	defer rows.Close()
 
-	out := make([]model.Interview, 0, limit)
+	out := make([]model.InterviewListItem, 0, limit)
 	for rows.Next() {
-		var e model.Interview
+		var e model.InterviewListItem
 		if err := rows.Scan(
-			&e.InterviewID, &e.CompanyID, &e.Source, &e.RawInput, &e.ProcessStatus, &e.Attempts,
-			&e.ProcessError, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt,
+			&e.InterviewID, &e.CompanyID, &e.Source, &e.RawInput, &e.ProcessStatus,
+			&e.ProcessError, &e.Position, &e.NoOfRound, &e.Location, &e.Metadata, &e.CreatedAt, &e.CompanyName,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan experience row: %w", err)
 		}

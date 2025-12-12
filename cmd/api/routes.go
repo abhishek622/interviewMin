@@ -35,7 +35,7 @@ func (app *application) routes() http.Handler {
 	v1 := r.Group("/api/v1")
 	v1.Use(app.RateLimitMiddleware())
 	{
-		v1.POST("/signup", app.Handler.SignUp)
+		// v1.POST("/signup", app.Handler.SignUp)
 		v1.POST("/login", app.Handler.Login)
 		v1.POST("/tokens/renew", app.Handler.RenewAccessToken)
 	}
@@ -61,7 +61,7 @@ func (app *application) routes() http.Handler {
 
 		// company routes
 		protected.GET("/companies", app.Handler.ListCompanies)
-		protected.GET("/companies/:company_id", app.Handler.CompanyDetails)
+		protected.GET("/companies/:identifier", app.Handler.GetCompany)
 		protected.DELETE("/companies/:company_id", app.Handler.DeleteCompany)
 
 		// question routes
@@ -74,7 +74,7 @@ func (app *application) routes() http.Handler {
 	admin := v1.Group("/")
 	admin.Use(app.AdminMiddleware())
 	{
-		// admin.POST("/signup", app.Handler.SignUp)
+		admin.POST("/signup", app.Handler.SignUp)
 		admin.POST("/change-password", app.Handler.ChangePassword)
 	}
 

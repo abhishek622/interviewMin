@@ -35,14 +35,31 @@ func (r *Repository) GetCompanyByName(ctx context.Context, userID uuid.UUID, nam
 	return &company, nil
 }
 
-func (r *Repository) CompanyList(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.CompanyList, int, error) {
+func (r *Repository) CompanyList(ctx context.Context, userID uuid.UUID, limit, offset int, sort string) ([]model.CompanyList, int, error) {
 	var total int
-	const qTotal = `SELECT COUNT(DISTINCT company_id) FROM companies WHERE user_id = $1`
+	const qTotal = `SELECT COUNT(DISTINCT c.company_id) FROM companies c INNER JOIN interviews i ON c.company_id = i.company_id WHERE c.user_id = $1`
 	if err := r.db.QueryRow(ctx, qTotal, userID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("query company list total: %w", err)
 	}
 
-	q := `SELECT c.company_id, c.name, c.slug, COUNT(i.interview_id) AS total_interviews FROM companies c INNER JOIN interviews i ON c.company_id = i.company_id WHERE c.user_id = $1 GROUP BY c.company_id ORDER BY MAX(i.updated_at) DESC LIMIT $2 OFFSET $3`
+	orderBy := "MAX(i.updated_at) DESC"
+	switch sort {
+	case "created_at":
+		orderBy = "MAX(i.updated_at) DESC"
+	case "interviews":
+		orderBy = "total_interviews DESC"
+	case "name":
+		orderBy = "c.name ASC"
+	}
+
+	q := fmt.Sprintf(`SELECT c.company_id, c.name, c.slug, COUNT(i.interview_id) AS total_interviews 
+		FROM companies c 
+		INNER JOIN interviews i ON c.company_id = i.company_id 
+		WHERE c.user_id = $1 
+		GROUP BY c.company_id 
+		ORDER BY %s 
+		LIMIT $2 OFFSET $3`, orderBy)
+
 	rows, err := r.db.Query(ctx, q, userID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query company list: %w", err)
@@ -86,4 +103,20 @@ func (r *Repository) DeleteCompany(ctx context.Context, companyID uuid.UUID) err
 		return fmt.Errorf("delete company: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) GetCompanyBySlug(ctx context.Context, userID uuid.UUID, slug string) (*model.CompanyDetails, error) {
+	const q = `SELECT c.company_id, c.name, c.slug, COUNT(i.interview_id) AS total_interviews, ROUND(AVG(COALESCE(i.no_of_round, 0)))::int AS avg_rounds
+FROM companies c
+LEFT JOIN interviews i ON i.company_id = c.company_id
+WHERE c.user_id = $1 AND c.slug = $2
+GROUP BY c.company_id;
+`
+	row := r.db.QueryRow(ctx, q, userID, slug)
+	var company model.CompanyDetails
+	err := row.Scan(&company.CompanyID, &company.Name, &company.Slug, &company.TotalInterviews, &company.AvgRounds)
+	if err != nil {
+		return nil, fmt.Errorf("query company details: %w", err)
+	}
+	return &company, nil
 }

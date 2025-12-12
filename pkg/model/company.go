@@ -23,8 +23,9 @@ type CompanyList struct {
 }
 
 type CompanyListReq struct {
-	Limit  int `json:"limit" form:"limit,default=20"`
-	Offset int `json:"offset" form:"offset,default=0"`
+	Limit  int    `json:"limit" form:"limit,default=20"`
+	Offset int    `json:"offset" form:"offset,default=0"`
+	Sort   string `json:"sort" form:"sort,default=created_at"`
 }
 
 type CompanyDetails struct {
