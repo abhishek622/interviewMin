@@ -40,8 +40,8 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("fetch failed: %v", err.Error())})
 			return
 		}
-		contentToProcess = res.Content
-		fetchedTitle = res.Title
+		contentToProcess = strings.TrimSpace(res.Content)
+		fetchedTitle = strings.TrimSpace(res.Title)
 	}
 
 	// Construct Metadata
@@ -150,7 +150,7 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 
 	metadata := map[string]interface{}{
 		"title":           fmt.Sprintf("%s Interview at %s", req.Position, req.Company),
-		"full_experience": req.RawInput,
+		"full_experience": strings.TrimSpace(req.RawInput),
 	}
 
 	if req.CompanyID == nil {
@@ -279,13 +279,24 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 }
 
 func (h *Handler) ListInterviewStats(c *gin.Context) {
+	companyID := c.Query("company_id")
+	if companyID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "company ID is required"})
+		return
+	}
+	uid, err := uuid.Parse(companyID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid company ID"})
+		return
+	}
+
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	stats, err := h.Repository.ListInterviewByUserStats(c.Request.Context(), claims.UserID)
+	stats, err := h.Repository.ListInterviewStats(c.Request.Context(), claims.UserID, uid)
 	if err != nil {
 		h.Logger.Sugar().Warnw("list interviews stats bad request", "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -296,15 +307,15 @@ func (h *Handler) ListInterviewStats(c *gin.Context) {
 }
 
 func (h *Handler) GetInterview(c *gin.Context) {
-	idStr := c.Param("id")
+	idStr := c.Param("interview_id")
 	if idStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing interview ID"})
 		return
 	}
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid interview ID format"})
 		return
 	}
 
@@ -349,13 +360,13 @@ func (h *Handler) GetInterview(c *gin.Context) {
 func (h *Handler) PatchInterview(c *gin.Context) {
 	idStr := c.Param("interview_id")
 	if idStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing interview ID"})
 		return
 	}
 
 	interviewID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid interview ID format"})
 		return
 	}
 
@@ -399,8 +410,8 @@ func (h *Handler) PatchInterview(c *gin.Context) {
 	if req.Title != nil {
 		metadata["title"] = req.Title
 	}
-	if req.FullExperience != nil {
-		metadata["full_experience"] = req.FullExperience
+	if req.RawInput != nil {
+		metadata["full_experience"] = strings.TrimSpace(*req.RawInput)
 	}
 
 	updates := make(map[string]interface{})

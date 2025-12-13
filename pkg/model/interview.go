@@ -75,13 +75,13 @@ type DeleteInterviewsRequest struct {
 }
 
 type PatchInterviewRequest struct {
-	CompanyID      *uuid.UUID `json:"company_id,omitempty"`
-	Company        *string    `json:"company,omitempty"`
-	Position       *string    `json:"position,omitempty"`
-	NoOfRound      *int       `json:"no_of_round,omitempty" binding:"min=1,max=100"`
-	Location       *string    `json:"location,omitempty"`
-	Title          *string    `json:"title,omitempty"`
-	FullExperience *string    `json:"full_experience,omitempty"`
+	CompanyID *uuid.UUID `json:"company_id,omitempty"`
+	Company   *string    `json:"company,omitempty"`
+	Position  *string    `json:"position,omitempty"`
+	NoOfRound *int       `json:"no_of_round,omitempty" binding:"min=1,max=100"`
+	Location  *string    `json:"location,omitempty"`
+	Title     *string    `json:"title,omitempty"`
+	RawInput  *string    `json:"raw_input,omitempty"`
 }
 
 type InterviewStats struct {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/abhishek622/interviewMin/pkg/model"
 	"github.com/gin-gonic/gin"
@@ -23,7 +24,8 @@ func (h *Handler) ListCompanies(c *gin.Context) {
 
 	companies, total, err := h.Repository.CompanyList(c.Request.Context(), claims.UserID, q.Limit, q.Offset, q.Sort)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "company list not found"})
+		h.Logger.Sugar().Errorw("failed to fetch company list", "err", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch company list"})
 		return
 	}
 
@@ -46,6 +48,7 @@ func (h *Handler) DeleteCompany(c *gin.Context) {
 	}
 
 	if err := h.Repository.DeleteCompany(c.Request.Context(), uid); err != nil {
+		h.Logger.Sugar().Errorw("failed to delete company", "company_id", companyId, "err", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete company"})
 		return
 	}
@@ -71,7 +74,8 @@ func (h *Handler) GetCompany(c *gin.Context) {
 		// It is a UUID, fetch details by ID
 		company, err := h.Repository.CompanyDetails(c.Request.Context(), claims.UserID, id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "company not found"})
+			h.Logger.Sugar().Errorw("failed to fetch company details", "company_id", identifier, "err", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch company details"})
 			return
 		}
 		c.JSON(http.StatusOK, company)
@@ -81,7 +85,8 @@ func (h *Handler) GetCompany(c *gin.Context) {
 	// It is a slug (or invalid UUID), fetch by Slug
 	company, err := h.Repository.GetCompanyBySlug(c.Request.Context(), claims.UserID, identifier)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "company not found"})
+		h.Logger.Sugar().Errorw("failed to fetch company details", "company_id", identifier, "err", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch company details"})
 		return
 	}
 	c.JSON(http.StatusOK, company)
@@ -94,15 +99,20 @@ func (h *Handler) ListCompaniesNameList(c *gin.Context) {
 		return
 	}
 
-	q := model.CompanyListReq{}
+	q := model.CompanyNameListReq{}
 	if err := c.ShouldBindQuery(&q); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	companies, total, err := h.Repository.CompanyListNameList(c.Request.Context(), claims.UserID, q.Limit, q.Offset, q.Sort)
+	if q.Search != nil && *q.Search != "" {
+		*q.Search = strings.ToLower(strings.TrimSpace(*q.Search))
+	}
+
+	companies, total, err := h.Repository.CompanyListNameList(c.Request.Context(), claims.UserID, q.Limit, q.Offset, q.Search)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "company list not found"})
+		h.Logger.Sugar().Errorw("failed to fetch company list", "err", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch company list"})
 		return
 	}
 

@@ -40,3 +40,9 @@ type CompanyListNameList struct {
 	CompanyID uuid.UUID `json:"company_id"`
 	Name      string    `json:"name"`
 }
+
+type CompanyNameListReq struct {
+	Limit  int     `json:"limit" form:"limit,default=20"`
+	Offset int     `json:"offset" form:"offset,default=0"`
+	Search *string `json:"search" form:"search"`
+}

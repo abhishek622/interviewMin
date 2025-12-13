@@ -119,8 +119,9 @@ func (r *Repository) ListInterviewByCompany(ctx context.Context, companyID uuid.
 	}
 
 	if search != nil && *search != "" {
-		whereConditions = append(whereConditions, fmt.Sprintf("search_tsv @@ plainto_tsquery('english', $%d)", argIndex))
+		whereConditions = append(whereConditions, fmt.Sprintf("i.search_tsv @@ plainto_tsquery('english', $%d)", argIndex))
 		args = append(args, *search)
+		argIndex++
 	}
 
 	whereClause := strings.Join(whereConditions, " AND ")
@@ -164,13 +165,13 @@ func (r *Repository) ListInterviewByCompany(ctx context.Context, companyID uuid.
 	return out, total, nil
 }
 
-func (r *Repository) ListInterviewByUserStats(ctx context.Context, userID uuid.UUID) (*model.InterviewListStats, error) {
+func (r *Repository) ListInterviewStats(ctx context.Context, userID, companyID uuid.UUID) (*model.InterviewListStats, error) {
 
 	query := `
 		WITH base_data AS (
 			SELECT source, process_status
 			FROM interviews
-			WHERE user_id = $1
+			WHERE user_id = $1 AND company_id = $2
 		),
 		source_counts AS (
 			SELECT source, COUNT(*) AS count
@@ -189,7 +190,7 @@ func (r *Repository) ListInterviewByUserStats(ctx context.Context, userID uuid.U
 
 	var sourceStatsJSON, statusStatsJSON []byte
 
-	err := r.db.QueryRow(ctx, query, userID).Scan(&sourceStatsJSON, &statusStatsJSON)
+	err := r.db.QueryRow(ctx, query, userID, companyID).Scan(&sourceStatsJSON, &statusStatsJSON)
 	if err != nil {
 		return nil, fmt.Errorf("query stats: %w", err)
 	}

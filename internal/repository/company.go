@@ -121,15 +121,31 @@ GROUP BY c.company_id;
 	return &company, nil
 }
 
-func (r *Repository) CompanyListNameList(ctx context.Context, userID uuid.UUID, limit, offset int, sort string) ([]model.CompanyListNameList, int, error) {
+func (r *Repository) CompanyListNameList(ctx context.Context, userID uuid.UUID, limit, offset int, search *string) ([]model.CompanyListNameList, int, error) {
 	var total int
-	const qTotal = `SELECT COUNT(*) FROM companies WHERE user_id = $1`
-	if err := r.db.QueryRow(ctx, qTotal, userID).Scan(&total); err != nil {
+	qTotal := `SELECT COUNT(*) FROM companies WHERE user_id = $1 `
+	argsTotal := []interface{}{userID}
+	if search != nil {
+		qTotal += fmt.Sprintf(" AND name ILIKE '%%' || $%d || '%%'", 2)
+		argsTotal = append(argsTotal, *search)
+	}
+	if err := r.db.QueryRow(ctx, qTotal, argsTotal...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("query company list total: %w", err)
 	}
 
-	q := `SELECT company_id, name FROM companies WHERE user_id = $1 LIMIT $2 OFFSET $3`
-	rows, err := r.db.Query(ctx, q, userID, limit, offset)
+	args := []interface{}{userID}
+	q := `SELECT company_id, name FROM companies WHERE user_id = $1`
+
+	if search != nil {
+		args = append(args, *search)
+		q += fmt.Sprintf(" AND name ILIKE '%%' || $%d || '%%'", len(args))
+	}
+
+	args = append(args, limit, offset)
+	q += " ORDER BY created_at DESC"
+	q += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)-1, len(args))
+
+	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query company list: %w", err)
 	}
