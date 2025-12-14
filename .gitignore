@@ -28,6 +28,10 @@ go.work.sum
 .env
 
 tmp/
+
+# Compiled binary
+app
+
 # Editor/IDE
 # .idea/
 # .vscode/
