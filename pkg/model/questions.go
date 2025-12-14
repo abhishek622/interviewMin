@@ -11,11 +11,10 @@ type Question struct {
 }
 
 type QuestionRes struct {
-	QID         int64     `json:"q_id"`
-	InterviewID int64     `json:"interview_id"`
-	Question    string    `json:"question"`
-	Type        string    `json:"type"`
-	CreatedAt   time.Time `json:"created_at"`
+	QID         int64  `json:"q_id"`
+	InterviewID int64  `json:"interview_id"`
+	Question    string `json:"question"`
+	Type        string `json:"type"`
 }
 
 type ListQuestionsQuery struct {

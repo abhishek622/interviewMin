@@ -19,10 +19,8 @@ const (
 type ProcessStatus string
 
 const (
-	ProcessStatusQueued     ProcessStatus = "queued"
-	ProcessStatusProcessing ProcessStatus = "processing"
-	ProcessStatusCompleted  ProcessStatus = "completed"
-	ProcessStatusFailed     ProcessStatus = "failed"
+	ProcessStatusSuccess ProcessStatus = "success"
+	ProcessStatusFailed  ProcessStatus = "failed"
 )
 
 type Interview struct {

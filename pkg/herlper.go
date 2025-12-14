@@ -29,3 +29,7 @@ func CalculateGrowth(current, previous int) int {
 	delta := float64(current - previous)
 	return int((delta / float64(previous)) * 100)
 }
+
+func StringPtr(s string) *string {
+	return &s
+}
