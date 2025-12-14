@@ -149,10 +149,10 @@ func (app *application) ReadOnlyMiddleware() gin.HandlerFunc {
 		}
 
 		// Block restricted demo user in production
-		const demoUserID = "36b584a3-f828-4925-8fdc-8fef8ae4e95a"
-		if userClaims.UserID.String() == demoUserID && app.Config.IsProduction() {
+		const previewUserID = "52dad4d5-261a-4dd0-8b40-46b107f7cc89"
+		if userClaims.UserID.String() == previewUserID && app.Config.IsProduction() {
 			if isWriteMethod(c.Request.Method) {
-				response.Forbidden(c, "This is a demo user. Write operations are restricted.")
+				response.Forbidden(c, "This is a preview user. Write operations are restricted.")
 				c.Abort()
 				return
 			}

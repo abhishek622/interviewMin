@@ -34,9 +34,9 @@ func (r *Repository) CreateQuestions(ctx context.Context, questions []model.Ques
 	return nil
 }
 
-func (r *Repository) ListQuestionByInterviewID(ctx context.Context, interviewID int64) ([]model.Question, error) {
+func (r *Repository) ListQuestionByInterviewID(ctx context.Context, interviewID int64) ([]model.QuestionRes, error) {
 	const q = `
-SELECT q_id, interview_id, question, type, created_at
+SELECT q_id, interview_id, question, type
 FROM questions
 WHERE interview_id = $1
 ORDER BY created_at ASC
@@ -47,10 +47,10 @@ ORDER BY created_at ASC
 	}
 	defer rows.Close()
 
-	var out []model.Question
+	var out []model.QuestionRes
 	for rows.Next() {
-		var qs model.Question
-		if err := rows.Scan(&qs.QID, &qs.InterviewID, &qs.Question, &qs.Type, &qs.CreatedAt); err != nil {
+		var qs model.QuestionRes
+		if err := rows.Scan(&qs.QID, &qs.InterviewID, &qs.Question, &qs.Type); err != nil {
 			return nil, fmt.Errorf("scan question: %w", err)
 		}
 		out = append(out, qs)

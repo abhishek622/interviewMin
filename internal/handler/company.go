@@ -34,6 +34,10 @@ func (h *Handler) ListCompanies(c *gin.Context) {
 		return
 	}
 
+	if companies == nil {
+		companies = []model.CompanyList{}
+	}
+
 	hasNext := total > q.Limit*(q.Offset+1)
 
 	response.OKWithMeta(c, companies, &response.Meta{
@@ -53,6 +57,23 @@ func (h *Handler) DeleteCompany(c *gin.Context) {
 	uid, err := uuid.Parse(companyID)
 	if err != nil {
 		response.BadRequest(c, "invalid company_id format")
+		return
+	}
+
+	claims := h.GetClaimsFromContext(c)
+	if claims == nil {
+		response.Unauthorized(c, "")
+		return
+	}
+
+	company, err := h.Repository.CompanyDetails(c.Request.Context(), claims.UserID, uid)
+	if err != nil {
+		response.NotFound(c, "company not found")
+		return
+	}
+
+	if company.Name == "unknown company" {
+		response.Forbidden(c, "cannot delete the default 'unknown company'")
 		return
 	}
 

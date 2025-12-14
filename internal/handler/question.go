@@ -70,10 +70,10 @@ func (h *Handler) ListQuestions(c *gin.Context) {
 	}
 
 	// Group by type
-	groupedQuestions := make(map[string][]model.Question)
+	groupedQuestions := make(map[string][]model.QuestionRes)
 	for _, question := range questions {
 		if _, ok := groupedQuestions[question.Type]; !ok {
-			groupedQuestions[question.Type] = []model.Question{}
+			groupedQuestions[question.Type] = []model.QuestionRes{}
 		}
 		groupedQuestions[question.Type] = append(groupedQuestions[question.Type], question)
 	}

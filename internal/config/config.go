@@ -10,8 +10,8 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	Env     string `envconfig:"APP_ENV" default:"development"`
-	Port    int    `envconfig:"APP_PORT" default:"8080"`
+	Env     string `envconfig:"ENV" default:"development"`
+	Port    int    `envconfig:"PORT" default:"8080"`
 	DB      DBConfig
 	Limiter RateLimiterConfig
 	CORS    CORSConfig
