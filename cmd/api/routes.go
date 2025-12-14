@@ -96,6 +96,8 @@ func (app *application) healthcheckHandler(c *gin.Context) {
 		"system_info": map[string]string{
 			"environment": app.Config.Env,
 			"version":     version,
+			"commit":      commit,
+			"build_time":  buildTime,
 		},
 	})
 }
