@@ -235,9 +235,7 @@ func (r *Repository) ListInterviewStats(ctx context.Context, userID, companyID u
 	}
 
 	allStatuses := []string{
-		string(model.ProcessStatusQueued),
-		string(model.ProcessStatusProcessing),
-		string(model.ProcessStatusCompleted),
+		string(model.ProcessStatusSuccess),
 		string(model.ProcessStatusFailed),
 	}
 

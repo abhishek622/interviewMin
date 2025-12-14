@@ -4,28 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/abhishek622/interviewMin/internal/fetcher"
 	"github.com/abhishek622/interviewMin/pkg"
 	"github.com/abhishek622/interviewMin/pkg/model"
+	"github.com/abhishek622/interviewMin/pkg/response"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.uber.org/zap"
 )
 
+// CreateInterviewWithAI creates an interview using AI extraction from URL or text
 func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 	var req model.CreateInterviewWithAIReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, "invalid request body")
 		return
 	}
 
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Unauthorized(c, "")
 		return
 	}
 
@@ -37,7 +39,11 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 	} else {
 		res, err := fetcher.Fetch(req.RawInput, req.Source, c.Request.UserAgent())
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("fetch failed: %v", err.Error())})
+			h.Logger.Warn("create_interview_ai: fetch failed",
+				zap.String("source", string(req.Source)),
+				zap.Error(err),
+			)
+			response.BadRequest(c, "failed to fetch content from URL")
 			return
 		}
 		contentToProcess = strings.TrimSpace(res.Content)
@@ -50,19 +56,51 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 		"full_experience": contentToProcess,
 	}
 
-	// attach title to contentToProcess
 	contentToProcess = fmt.Sprintf("%s\n\n%s", fetchedTitle, contentToProcess)
 
-	// return success response immediately
-	c.JSON(http.StatusOK, gin.H{"message": "Interview processing started, it will be added soon"})
+	unknownCompany, err := h.Repository.GetCompanyByName(c.Request.Context(), claims.UserID, "unknown company")
+	if err != nil {
+		h.Logger.Error("create_interview_ai: failed to get unknown company",
+			zap.String("user_id", claims.UserID.String()),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to get unknown company")
+		return
+	}
+	if unknownCompany == nil {
+		response.InternalError(c, "unknown company not found")
+		return
+	}
 
-	// background process
+	response.OK(c, gin.H{"message": "Interview processing started, it will be added soon"})
+
+	// Background process
 	go func(userID uuid.UUID, content string, source model.Source, meta map[string]interface{}) {
 		ctx := context.Background()
 
 		extracted, err := h.GroqClient.ExtractInterview(ctx, content)
 		if err != nil {
-			h.Logger.Sugar().Errorw("extraction failed", "err", err.Error())
+			h.Logger.Error("create_interview_ai: extraction failed",
+				zap.String("user_id", userID.String()),
+				zap.Error(err),
+			)
+
+			// create interview in unknown company
+			_, err = h.Repository.CreateInterview(ctx, &model.Interview{
+				UserID:        userID,
+				Source:        source,
+				RawInput:      content,
+				ProcessStatus: model.ProcessStatusFailed,
+				Metadata:      meta,
+				CompanyID:     unknownCompany.CompanyID,
+				ProcessError:  pkg.StringPtr(err.Error()),
+			})
+			if err != nil {
+				h.Logger.Error("create_interview_ai: failed to create interview",
+					zap.String("user_id", userID.String()),
+					zap.Error(err),
+				)
+			}
 			return
 		}
 
@@ -70,7 +108,7 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 		companyName := strings.TrimSpace(strings.ToLower(extracted.Company))
 
 		if companyName != "" {
-			// find existing company
+			// Find existing company
 			company, _ := h.Repository.GetCompanyByName(ctx, userID, companyName)
 			if company != nil {
 				companyID = company.CompanyID
@@ -85,7 +123,10 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 				}
 				newCompanyID, err := h.Repository.CreateCompany(ctx, newCompany)
 				if err != nil {
-					h.Logger.Sugar().Errorw("failed to create new company", "err", err.Error())
+					h.Logger.Error("create_interview_ai: failed to create company",
+						zap.String("company_name", companyName),
+						zap.Error(err),
+					)
 				} else if newCompanyID != nil {
 					companyID = *newCompanyID
 				}
@@ -93,19 +134,14 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 		}
 
 		if companyID == uuid.Nil {
-			unknownCompany, _ := h.Repository.GetCompanyByName(ctx, userID, "unknown company")
-			if unknownCompany != nil {
-				companyID = unknownCompany.CompanyID
-			} else {
-				h.Logger.Sugar().Warn("unknown company not found for user")
-			}
+			companyID = unknownCompany.CompanyID
 		}
 
 		interviewID, err := h.Repository.CreateInterview(ctx, &model.Interview{
 			UserID:        userID,
 			Source:        source,
 			RawInput:      content,
-			ProcessStatus: model.ProcessStatusCompleted,
+			ProcessStatus: model.ProcessStatusSuccess,
 			Metadata:      meta,
 			CompanyID:     companyID,
 			Position:      &extracted.Position,
@@ -113,11 +149,14 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 			Location:      &extracted.Location,
 		})
 		if err != nil {
-			h.Logger.Sugar().Errorw("failed to create interview in background", "err", err.Error())
+			h.Logger.Error("create_interview_ai: failed to create interview",
+				zap.String("user_id", userID.String()),
+				zap.Error(err),
+			)
 			return
 		}
 
-		// 4. Save Questions
+		// Save Questions
 		if len(extracted.Questions) > 0 {
 			qs := make([]model.Question, len(extracted.Questions))
 			for i, q := range extracted.Questions {
@@ -128,23 +167,31 @@ func (h *Handler) CreateInterviewWithAI(c *gin.Context) {
 				}
 			}
 			if err := h.Repository.CreateQuestions(ctx, qs); err != nil {
-				h.Logger.Sugar().Errorw("failed to save questions", "interview_id", *interviewID, "err", err.Error())
+				h.Logger.Error("create_interview_ai: failed to save questions",
+					zap.Int64("interview_id", *interviewID),
+					zap.Error(err),
+				)
 			}
 		}
 
+		h.Logger.Info("create_interview_ai: interview created successfully",
+			zap.String("user_id", userID.String()),
+			zap.Int64("interview_id", *interviewID),
+		)
 	}(claims.UserID, contentToProcess, req.Source, metadata)
 }
 
+// CreateInterview creates an interview with manual input
 func (h *Handler) CreateInterview(c *gin.Context) {
 	var req model.CreateInterviewReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, "invalid request body")
 		return
 	}
 
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Unauthorized(c, "")
 		return
 	}
 
@@ -167,7 +214,11 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 			}
 			newCompanyID, err := h.Repository.CreateCompany(c.Request.Context(), newCompany)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				h.Logger.Error("create_interview: failed to create company",
+					zap.String("company_name", companyName),
+					zap.Error(err),
+				)
+				response.InternalError(c, "failed to create company")
 				return
 			}
 			req.CompanyID = newCompanyID
@@ -179,7 +230,7 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 		UserID:        claims.UserID,
 		Source:        req.Source,
 		RawInput:      req.RawInput,
-		ProcessStatus: model.ProcessStatusCompleted,
+		ProcessStatus: model.ProcessStatusSuccess,
 		Metadata:      metadata,
 		Position:      &req.Position,
 		NoOfRound:     req.NoOfRound,
@@ -188,18 +239,33 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 
 	interviewID, err := h.Repository.CreateFullInterview(c.Request.Context(), &createObj)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.Logger.Error("create_interview: failed to create interview",
+			zap.String("user_id", claims.UserID.String()),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to create interview")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "interview created successfully", "interview_id": interviewID})
+	h.Logger.Info("create_interview: interview created",
+		zap.String("user_id", claims.UserID.String()),
+		zap.Int64("interview_id", *interviewID),
+	)
 
-	// background question extraction
+	response.OK(c, gin.H{
+		"message":      "interview created successfully",
+		"interview_id": interviewID,
+	})
+
+	// Background question extraction
 	go func(interviewID int64, content string) {
 		ctx := context.Background()
 		extracted, err := h.GroqClient.InterviewQuestions(ctx, content)
 		if err != nil {
-			h.Logger.Sugar().Warnw("background question extraction failed", "interview_id", interviewID, "err", err.Error())
+			h.Logger.Warn("create_interview: background question extraction failed",
+				zap.Int64("interview_id", interviewID),
+				zap.Error(err),
+			)
 			return
 		}
 
@@ -213,26 +279,30 @@ func (h *Handler) CreateInterview(c *gin.Context) {
 				}
 			}
 			if err := h.Repository.CreateQuestions(ctx, qs); err != nil {
-				h.Logger.Sugar().Errorw("failed to save questions in background", "interview_id", interviewID, "err", err.Error())
+				h.Logger.Error("create_interview: failed to save questions",
+					zap.Int64("interview_id", interviewID),
+					zap.Error(err),
+				)
 			}
 		}
 	}(*interviewID, req.RawInput)
 }
 
+// ListInterviews returns a paginated list of interviews for a company
 func (h *Handler) ListInterviews(c *gin.Context) {
 	var q model.ListInterviewQuery
 	if err := c.ShouldBindJSON(&q); err != nil {
 		if strings.Contains(err.Error(), "CompanyID") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "company_id is required"})
+			response.BadRequest(c, "company_id is required")
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, "invalid request body")
 		return
 	}
 
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Unauthorized(c, "")
 		return
 	}
 
@@ -242,12 +312,10 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 	}
 	offset := max((q.Page-1)*limit, 0)
 
-	// filters
+	// Build filters
 	filters := make(map[string]interface{})
-
 	if q.Filter != nil {
 		if q.Filter.Source != nil {
-			// Create a slice of standard strings
 			sourceStrings := make([]string, len(*q.Filter.Source))
 			for i, v := range *q.Filter.Source {
 				sourceStrings[i] = string(v)
@@ -265,131 +333,151 @@ func (h *Handler) ListInterviews(c *gin.Context) {
 
 	data, total, err := h.Repository.ListInterviewByCompany(c.Request.Context(), q.CompanyID, limit, offset, filters, q.Search)
 	if err != nil {
-		h.Logger.Sugar().Warnw("list interviews bad request", "err", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		h.Logger.Error("list_interviews: failed to fetch interviews",
+			zap.String("company_id", q.CompanyID.String()),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to fetch interviews")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":      data,
-		"total":     total,
-		"page":      q.Page,
-		"page_size": limit,
+	response.OKWithMeta(c, data, &response.Meta{
+		Page:     q.Page,
+		PageSize: limit,
+		Total:    total,
 	})
 }
 
+// ListInterviewStats returns interview statistics for a company
 func (h *Handler) ListInterviewStats(c *gin.Context) {
 	companyID := c.Query("company_id")
 	if companyID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "company ID is required"})
+		response.BadRequest(c, "company_id is required")
 		return
 	}
+
 	uid, err := uuid.Parse(companyID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid company ID"})
+		response.BadRequest(c, "invalid company_id format")
 		return
 	}
 
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Unauthorized(c, "")
 		return
 	}
 
 	stats, err := h.Repository.ListInterviewStats(c.Request.Context(), claims.UserID, uid)
 	if err != nil {
-		h.Logger.Sugar().Warnw("list interviews stats bad request", "err", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		h.Logger.Error("list_interview_stats: failed to fetch stats",
+			zap.String("company_id", companyID),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to fetch interview stats")
 		return
 	}
 
-	c.JSON(http.StatusOK, stats)
+	response.OK(c, stats)
 }
 
+// GetInterview returns a single interview with its questions
 func (h *Handler) GetInterview(c *gin.Context) {
 	idStr := c.Param("interview_id")
 	if idStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing interview ID"})
+		response.BadRequest(c, "interview_id is required")
 		return
 	}
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid interview ID format"})
+		response.BadRequest(c, "invalid interview_id format")
 		return
 	}
 
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Unauthorized(c, "")
 		return
 	}
 
 	interview, err := h.Repository.GetInterviewByID(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
+			response.NotFound(c, "interview not found")
 			return
 		}
-		h.Logger.Sugar().Errorw("failed to get interview", "id", id, "err", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		h.Logger.Error("get_interview: failed to fetch interview",
+			zap.Int64("interview_id", id),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to fetch interview")
 		return
 	}
 
 	company, err := h.Repository.CompanyDetails(c.Request.Context(), claims.UserID, interview.CompanyID)
 	if err != nil {
-		h.Logger.Sugar().Errorw("failed to get company", "id", interview.CompanyID, "err", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		h.Logger.Error("get_interview: failed to fetch company",
+			zap.String("company_id", interview.CompanyID.String()),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to fetch interview details")
 		return
 	}
 
 	interview.CompanyName = &company.Name
 
-	// Fetch questions
-	qs, err := h.Repository.ListQuestionByInterviewID(c.Request.Context(), id)
-	if err != nil {
-		h.Logger.Sugar().Warnw("failed to fetch questions", "err", err.Error())
-	}
+	// // Fetch questions
+	// questions, err := h.Repository.ListQuestionByInterviewID(c.Request.Context(), id)
+	// if err != nil {
+	// 	h.Logger.Warn("get_interview: failed to fetch questions",
+	// 		zap.Int64("interview_id", id),
+	// 		zap.Error(err),
+	// 	)
+	// 	questions = nil
+	// }
 
-	c.JSON(http.StatusOK, gin.H{
-		"interview": interview,
-		"questions": qs,
-	})
+	response.OK(c, interview)
 }
 
+// PatchInterview updates an existing interview
 func (h *Handler) PatchInterview(c *gin.Context) {
 	idStr := c.Param("interview_id")
 	if idStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing interview ID"})
+		response.BadRequest(c, "interview_id is required")
 		return
 	}
 
 	interviewID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid interview ID format"})
+		response.BadRequest(c, "invalid interview_id format")
 		return
 	}
 
 	currInterview, err := h.Repository.GetInterviewByID(c.Request.Context(), interviewID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
+		response.NotFound(c, "interview not found")
 		return
 	}
 
 	var req model.PatchInterviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, "invalid request body")
 		return
 	}
 
-	// update company info
+	// Update company info
 	if req.CompanyID != nil && req.Company != nil {
 		company := &model.Company{
 			Name: *req.Company,
 			Slug: pkg.GenerateSlug(*req.Company),
 		}
 		if err := h.Repository.UpdateCompany(c.Request.Context(), *req.CompanyID, company); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			h.Logger.Error("patch_interview: failed to update company",
+				zap.String("company_id", req.CompanyID.String()),
+				zap.Error(err),
+			)
+			response.InternalError(c, "failed to update company")
 			return
 		}
 	} else if req.CompanyID == nil && req.Company != nil {
@@ -400,7 +488,11 @@ func (h *Handler) PatchInterview(c *gin.Context) {
 		}
 		companyID, err := h.Repository.CreateCompany(c.Request.Context(), company)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			h.Logger.Error("patch_interview: failed to create company",
+				zap.String("company_name", *req.Company),
+				zap.Error(err),
+			)
+			response.InternalError(c, "failed to create company")
 			return
 		}
 		req.CompanyID = companyID
@@ -430,73 +522,99 @@ func (h *Handler) PatchInterview(c *gin.Context) {
 	updates["company_id"] = req.CompanyID
 
 	if err := h.Repository.UpdateInterview(c.Request.Context(), interviewID, updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.Logger.Error("patch_interview: failed to update interview",
+			zap.Int64("interview_id", interviewID),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to update interview")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "interview updated successfully"})
+	h.Logger.Info("patch_interview: interview updated",
+		zap.Int64("interview_id", interviewID),
+	)
+
+	response.Message(c, "interview updated successfully")
 }
 
+// DeleteInterviews deletes multiple interviews
 func (h *Handler) DeleteInterviews(c *gin.Context) {
 	var req model.DeleteInterviewsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, "invalid request body")
 		return
 	}
 
 	count, err := h.Repository.CheckInterviewExists(c.Request.Context(), req.InterviewIDs)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "interview not found"})
+		response.NotFound(c, "interview not found")
 		return
 	}
 
 	if count != len(req.InterviewIDs) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Invalid interview IDs present in list"})
+		response.BadRequest(c, "some interview IDs are invalid")
 		return
 	}
 
 	if err := h.Repository.DeleteInterviews(c.Request.Context(), req.InterviewIDs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.Logger.Error("delete_interviews: failed to delete",
+			zap.Int("count", len(req.InterviewIDs)),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to delete interviews")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "interviews deleted successfully"})
+	h.Logger.Info("delete_interviews: interviews deleted",
+		zap.Int("count", len(req.InterviewIDs)),
+	)
+
+	response.Message(c, "interviews deleted successfully")
 }
 
+// GetInterviewStats returns global interview statistics for a user
 func (h *Handler) GetInterviewStats(c *gin.Context) {
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Unauthorized(c, "")
 		return
 	}
 
 	stats, err := h.Repository.GetInterviewStats(c.Request.Context(), claims.UserID)
 	if err != nil {
-		h.Logger.Sugar().Errorw("failed to get interview stats", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		h.Logger.Error("get_interview_stats: failed to fetch stats",
+			zap.String("user_id", claims.UserID.String()),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to fetch interview stats")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "interview stats fetched successfully", "stats": stats})
+	response.OK(c, stats)
 }
 
+// RecentInterviews returns the most recent interviews for a user
 func (h *Handler) RecentInterviews(c *gin.Context) {
 	claims := h.GetClaimsFromContext(c)
 	if claims == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		response.Unauthorized(c, "")
 		return
 	}
 
 	interviews, err := h.Repository.RecentInterviews(c.Request.Context(), claims.UserID)
 	if err != nil {
-		h.Logger.Sugar().Errorw("failed to get recent interviews", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
-	}
-	if len(interviews) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "interviews not found"})
+		h.Logger.Error("recent_interviews: failed to fetch",
+			zap.String("user_id", claims.UserID.String()),
+			zap.Error(err),
+		)
+		response.InternalError(c, "failed to fetch recent interviews")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "interviews fetched successfully", "interviews": interviews})
+	if len(interviews) == 0 {
+		response.OK(c, []interface{}{})
+		return
+	}
+
+	response.OK(c, interviews)
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/abhishek622/interviewMin/internal/auth"
+	"github.com/abhishek622/interviewMin/internal/config"
 	"github.com/abhishek622/interviewMin/internal/groq"
 	"github.com/abhishek622/interviewMin/internal/repository"
 	"github.com/abhishek622/interviewMin/pkg"
@@ -9,21 +10,32 @@ import (
 	"go.uber.org/zap"
 )
 
+// Handler contains all HTTP handlers and their dependencies
 type Handler struct {
 	Logger     *zap.Logger
 	Repository *repository.Repository
 	TokenMaker *auth.JWTMaker
 	Crypto     *pkg.Crypto
 	GroqClient *groq.Client
+	Config     *config.Config
 }
 
-func NewHandler(logger *zap.Logger, repository *repository.Repository, tokenMaker *auth.JWTMaker, crypto *pkg.Crypto, groqClient *groq.Client) *Handler {
+// NewHandler creates a new Handler with all dependencies
+func NewHandler(
+	logger *zap.Logger,
+	repository *repository.Repository,
+	tokenMaker *auth.JWTMaker,
+	crypto *pkg.Crypto,
+	groqClient *groq.Client,
+	cfg *config.Config,
+) *Handler {
 	return &Handler{
 		Logger:     logger,
 		Repository: repository,
 		TokenMaker: tokenMaker,
 		Crypto:     crypto,
 		GroqClient: groqClient,
+		Config:     cfg,
 	}
 }
 
