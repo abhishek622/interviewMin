@@ -20,13 +20,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// Build-time variables set via ldflags
-// go build -ldflags "-X main.version=1.0.0 -X main.commit=abc123 -X main.buildTime=2024-01-01T00:00:00Z"
-var (
-	version   = "dev"
-	commit    = "unknown"
-	buildTime = "unknown"
-)
+// Version can be set at build time via: go build -ldflags "-X main.version=1.0.0"
+var version = "1.0.0"
 
 type application struct {
 	DB         *pgxpool.Pool
