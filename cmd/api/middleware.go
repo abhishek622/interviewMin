@@ -133,6 +133,10 @@ func getClientIP(c *gin.Context) string {
 	return ip
 }
 
+var readOnlyPOSTEndpoints = map[string]bool{
+	"/api/v1/interviews/list": true,
+}
+
 // ReadOnlyMiddleware restricts write operations for demo users in production
 func (app *application) ReadOnlyMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -151,7 +155,7 @@ func (app *application) ReadOnlyMiddleware() gin.HandlerFunc {
 		// Block restricted demo user in production
 		const previewUserID = "52dad4d5-261a-4dd0-8b40-46b107f7cc89"
 		if userClaims.UserID.String() == previewUserID && app.Config.IsProduction() {
-			if isWriteMethod(c.Request.Method) {
+			if isWriteOperation(c.Request.Method, c.Request.URL.Path) {
 				response.Forbidden(c, "This is a preview user. Write operations are restricted.")
 				c.Abort()
 				return
@@ -162,11 +166,14 @@ func (app *application) ReadOnlyMiddleware() gin.HandlerFunc {
 	}
 }
 
-// isWriteMethod checks if the HTTP method is a write operation
-func isWriteMethod(method string) bool {
+// isWriteOperation checks if the HTTP request is a write operation
+func isWriteOperation(method, path string) bool {
 	switch method {
-	case "POST", "PUT", "PATCH", "DELETE":
+	case "PUT", "PATCH", "DELETE":
 		return true
+	case "POST":
+		// Check if this POST endpoint is actually read-only
+		return !readOnlyPOSTEndpoints[path]
 	default:
 		return false
 	}
